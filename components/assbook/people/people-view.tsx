@@ -1,4 +1,5 @@
 "use client";
+import { BehindMark } from "@/components/assbook/behind-mark";
 import { Loader2, RefreshCw } from "lucide-react";
 import { FollowButton, PersonRow } from "@/components/assbook/people/person-row";
 import type { Profile } from "@/lib/types";
@@ -42,7 +43,7 @@ export function PeopleView({
         </div>
       ) : people.length === 0 ? (
         <div className="state-card empty-card">
-          <span aria-hidden="true">👖</span>
+          <BehindMark size={36} />
           <h2>Quiet back here.</h2>
           <p>
             You are the first one in. Invite a friend and give them something to

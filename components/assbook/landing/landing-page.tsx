@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { BadgeCheck, Heart, Shield, Users } from "lucide-react";
 import { Toaster } from "sonner";
+import { BehindMark } from "@/components/assbook/behind-mark";
 import { SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
 
@@ -118,7 +119,7 @@ export function LandingPage({
         <div className="landing-art" aria-hidden="true">
           <div className="mini-profile">
             <div className="mini-profile-top">
-              <span className="mini-avatar">👖</span>
+              <span className="mini-avatar"><BehindMark seed="welcome" size={18} /></span>
               <span className="mini-who">
                 <b>The Assbook crew</b>
                 <small>@welcome</small>
@@ -134,7 +135,7 @@ export function LandingPage({
             <div className="mini-feed">
               <article className="mini-post">
                 <header>
-                  <span className="mini-avatar">👖</span>
+                  <span className="mini-avatar"><BehindMark seed="welcome" size={18} /></span>
                   <b>The Assbook crew</b>
                 </header>
                 <p>
@@ -150,7 +151,7 @@ export function LandingPage({
               </article>
               <article className="mini-post">
                 <header>
-                  <span className="mini-avatar">🩳</span>
+                  <span className="mini-avatar"><BehindMark seed="jeanclaude" size={18} /></span>
                   <b>Jean Claude</b>
                 </header>
                 <p>Finally, a platform where being behind is a good thing.</p>

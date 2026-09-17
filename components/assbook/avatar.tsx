@@ -1,3 +1,4 @@
+import { BehindMark } from "@/components/assbook/behind-mark";
 export function Avatar({
   person,
   large = false,
@@ -18,9 +19,7 @@ export function Avatar({
           decoding="async"
         />
       ) : (
-        <span aria-hidden="true">
-          {person?.handle === "jeanclaude" ? "🩳" : "👖"}
-        </span>
+        <BehindMark seed={person?.handle ?? ""} size={large ? 48 : 28} />
       )}
     </span>
   );
