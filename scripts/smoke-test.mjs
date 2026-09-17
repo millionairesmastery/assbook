@@ -43,6 +43,14 @@ async function req(
   assert.equal(res.status, expected, path + ": " + JSON.stringify(json));
   return json;
 }
+function sqlLocal(sql) {
+  const r = spawnSync(
+    process.execPath,
+    ["--import", "./scripts/sites-env.mjs", "./node_modules/wrangler/bin/wrangler.js", "d1", "execute", "DB", "--local", "--config", "wrangler.jsonc", "--persist-to", ".wrangler/state", "--command", sql],
+    { stdio: "pipe" },
+  );
+  if (r.status !== 0) throw new Error("local SQL failed: " + sql);
+}
 let passed = 0;
 function pass(label) {
   console.log("PASS " + label);
@@ -303,8 +311,13 @@ try {
     assert.equal(withPin[0].official, 1);
     assert.equal(withPin.filter((x) => x.id === welcome.id).length, 1, "Pinned post appears once");
     const followingPin = (await req(b, "feed?filter=following")).posts;
-    assert.equal(followingPin[0]?.id, welcome.id, "Pinned post tops the Following tab too");
+    assert.equal(followingPin[0]?.id, welcome.id, "Pinned post tops the Following tab for a newcomer");
     assert.equal(followingPin.filter((x) => x.id === welcome.id).length, 1);
+    // A member past their first week sees the pinned post in its normal place.
+    sqlLocal("UPDATE users SET created=" + (Date.now() - 8 * 86400000) + " WHERE handle='" + handles[0] + "'");
+    const settled = (await req(a, "feed")).posts;
+    assert.equal(settled[0]?.id, later.id, "Settled members see the timeline order");
+    assert.ok(settled.some((x) => x.id === welcome.id), "The pinned post is still in the feed");
     assert.equal((await req(admin, "admin/pin/" + welcome.id, "POST", {})).pinned, false);
     await req(a, "admin/pin/" + welcome.id, "POST", {}, 403);
     const adminProfile = (await req(anon, "profile/" + adminUser.handle)).profile;

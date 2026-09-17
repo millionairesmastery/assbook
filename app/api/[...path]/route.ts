@@ -84,9 +84,13 @@ async function handle(req: Request) {
       const clauses = ["p.deleted=0", blockClause];
       const args: (string | number)[] = [adminHandle(), uid, uid, uid, uid, uid, uid];
       const single = url.searchParams.get("post");
-      // Pinned posts are site announcements: page one of the Everyone and
-      // Following tabs shows them first, once, whoever the member follows.
-      const mainFeed = ["everyone", "following"].includes(filter) && !q && !profile && !single;
+      // Pinned posts are the welcome for newcomers: on page one of the
+      // Everyone and Following tabs they come first for visitors and for
+      // members in their first week, whoever they follow. After that they
+      // sit in the timeline like any other post.
+      const newcomer = !me || me.created > Date.now() - 7 * 86400000;
+      const mainFeed =
+        newcomer && ["everyone", "following"].includes(filter) && !q && !profile && !single;
       if (mainFeed) clauses.push("p.pinned=0");
       if (filter === "following") {
         clauses.push(
