@@ -5,13 +5,16 @@ import type { Profile } from "@/lib/types";
 
 // Loads the signed-in viewer once. Everything else waits for `ready` so a cold
 // load fetches the feed a single time.
-export function useViewer() {
+export function useViewer(knownVisitor = false) {
   const [user, setUser] = useState<Profile | null>(null);
-  const [ready, setReady] = useState(false);
+  // When the server already saw a request with no session cookie, there is
+  // nobody to load: the landing page can render at once, on the server too.
+  const [ready, setReady] = useState(knownVisitor);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (knownVisitor && attempt === 0) return;
     const controller = new AbortController();
     api<{ user: Profile | null }>("me", { signal: controller.signal })
       .then((data) => {
@@ -25,7 +28,7 @@ export function useViewer() {
         setReady(true);
       });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, knownVisitor]);
 
   const retry = useCallback(() => {
     setError("");

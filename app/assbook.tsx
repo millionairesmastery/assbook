@@ -78,8 +78,14 @@ function storeTab(tab: FeedTab) {
   }
 }
 
-export default function Assbook() {
-  const viewer = useViewer();
+export default function Assbook({
+  knownVisitor = false,
+}: {
+  // Set by the server when the request carried no session cookie and no deep
+  // link, so the landing page is part of the first HTML.
+  knownVisitor?: boolean;
+}) {
+  const viewer = useViewer(knownVisitor);
   const user = viewer.user;
   const viewerId = user?.id ?? "";
   const now = useNow();
@@ -97,7 +103,7 @@ export default function Assbook() {
   const [postId, setPostId] = useState("");
   // Null until the address bar has been read. A shared ?post= or ?profile=
   // link opens the app itself, signed in or not, so the content is there.
-  const [deepLink, setDeepLink] = useState<boolean | null>(null);
+  const [deepLink, setDeepLink] = useState<boolean | null>(knownVisitor ? false : null);
 
   const [modal, setModal] = useState("");
   const [infoModal, setInfoModal] = useState("");

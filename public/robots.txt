@@ -1,0 +1,10 @@
+# Assbook welcomes crawlers: search engines and AI crawlers alike.
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://your-assbook.example/sitemap.xml
+
+# Content signals (https://contentsignals.org): search, AI answers and AI
+# training are all permitted for public pages.
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
