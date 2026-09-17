@@ -11,8 +11,11 @@ const password = "  long-unrelated-words-" + id + "  ";
 const nextPassword = "Another-strong-passphrase-" + id;
 const sha = s => createHash("sha256").update(s).digest("hex");
 const directory = resolve(".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
-const files = readdirSync(directory).filter(f => f.endsWith(".sqlite") && f !== "metadata.sqlite");
-assert.equal(files.length, 1, "Use a dedicated private local database");
+const files = readdirSync(directory).filter(f => f.endsWith(".sqlite") && f !== "metadata.sqlite").filter(f => {
+  const check = spawnSync("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); sys.exit(0 if c.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name='auth_tokens'\").fetchone() else 1)", join(directory,f)]);
+  return check.status === 0;
+});
+assert.equal(files.length, 1, "Use one initialized Assbook database for this local test");
 const database = join(directory, files[0]);
 function sql(query, values = []) {
   const r = spawnSync("python3", ["-c", "import sqlite3,json,sys; c=sqlite3.connect(sys.argv[1],timeout=10); c.row_factory=sqlite3.Row; rows=c.execute(sys.argv[2],json.loads(sys.argv[3])).fetchall(); c.commit(); print(json.dumps([dict(r) for r in rows]))", database, query, JSON.stringify(values)], { encoding: "utf8" });
