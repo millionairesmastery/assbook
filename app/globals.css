@@ -2190,3 +2190,34 @@ button.stat:hover {
     overflow: visible;
   }
 }
+
+/* Landing feature items carry a label and one line of detail. */
+.landing-features li {
+  align-items: flex-start;
+}
+.landing-features li > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.landing-features li small {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #5f6b75;
+  font-weight: 400;
+}
+.landing-more {
+  color: #c94120;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.landing-more:hover {
+  text-decoration: underline;
+}
+@media (max-height: 760px) {
+  .landing-features li small {
+    display: none;
+  }
+}

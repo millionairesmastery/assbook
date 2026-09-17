@@ -5,11 +5,63 @@ import { SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
 
 const features = [
-  { icon: Shield, label: "Fully clothed, always" },
-  { icon: Users, label: "Real people, real backsides" },
-  { icon: BadgeCheck, label: "Every photo checked" },
-  { icon: Heart, label: "Bad puns encouraged" },
+  {
+    icon: Shield,
+    label: "Fully clothed, always",
+    detail: "Jeans, skirts, shorts. No underwear, no nudity, ever.",
+  },
+  {
+    icon: Users,
+    label: "Real people, real backsides",
+    detail: "Your own photo, your own permission, adults only.",
+  },
+  {
+    icon: BadgeCheck,
+    label: "Every photo checked",
+    detail: "Checked before it is stored, reviewed by people when in doubt.",
+  },
+  {
+    icon: Heart,
+    label: "Bad puns encouraged",
+    detail: "Posts, replies, likes and follows, minus the doom-scroll.",
+  },
 ];
+
+// Structured facts for search engines and AI agents: who runs this, what it
+// is, and what it costs (nothing).
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://assbook.app/#org",
+      name: "Assbook",
+      url: "https://assbook.app/",
+      logo: "https://assbook.app/favicon.svg",
+      email: "hello@assbook.app",
+      description:
+        "Assbook is a small social network with one ridiculous rule: your profile photo is your own fully clothed behind.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://assbook.app/#site",
+      url: "https://assbook.app/",
+      name: "Assbook",
+      publisher: { "@id": "https://assbook.app/#org" },
+    },
+    {
+      "@type": "WebApplication",
+      name: "Assbook",
+      url: "https://assbook.app/",
+      applicationCategory: "SocialNetworkingApplication",
+      operatingSystem: "Web",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      description:
+        "Profiles, posts, replies, likes, bookmarks and follows for people 18 and older. Every photo is checked automatically before it is stored; nudity and underwear are never allowed.",
+      publisher: { "@id": "https://assbook.app/#org" },
+    },
+  ],
+};
 
 // What a visitor sees before they have an account: one screenful, no scroll.
 // The illustration is drawn in CSS rather than screenshotted, so it stays
@@ -36,7 +88,11 @@ export function LandingPage({
           <p className="landing-blurb">
             A small social network with one ridiculous rule: your profile photo
             is your own fully clothed behind. Everything else is normal: posts,
-            replies, likes, people worth following.
+            replies, likes, people worth following. Free to join, made for
+            adults, and run by people who read every report.{" "}
+            <a className="landing-more" href="/about">
+              Read the whole story
+            </a>
           </p>
           <div className="landing-actions">
             <button type="button" className="primary" onClick={onJoin}>
@@ -47,10 +103,13 @@ export function LandingPage({
             </button>
           </div>
           <ul className="landing-features">
-            {features.map(({ icon: Icon, label }) => (
+            {features.map(({ icon: Icon, label, detail }) => (
               <li key={label}>
                 <Icon size={17} aria-hidden="true" />
-                {label}
+                <span>
+                  <b>{label}</b>
+                  <small>{detail}</small>
+                </span>
               </li>
             ))}
           </ul>
@@ -101,6 +160,13 @@ export function LandingPage({
         </div>
       </main>
       <SiteFooter />
+      <script
+        type="application/ld+json"
+        // Static, hand-written data with no user input in it.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+        }}
+      />
     </div>
   );
 }
