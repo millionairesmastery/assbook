@@ -2858,3 +2858,13 @@ button.stat:hover {
     min-height: 76px;
   }
 }
+
+/* iOS zooms into any field smaller than 16px. On phones every field is 16px,
+   so tapping to type never zooms the page. Pinch zoom stays available. */
+@media (max-width: 650px) {
+  html input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  html textarea,
+  html select {
+    font-size: 16px !important;
+  }
+}
