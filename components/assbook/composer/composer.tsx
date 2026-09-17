@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { ArrowRight, ImagePlus, Loader2, X } from "lucide-react";
 import { Avatar } from "@/components/assbook/avatar";
@@ -25,8 +26,17 @@ export function Composer({
   submitting: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
 }) {
+  const postButton = useRef<HTMLButtonElement>(null);
+  const section = useRef<HTMLElement>(null);
+  // A freshly attached photo is easy to leave behind: bring the composer into
+  // view and put the focus on Post so the next step is obvious.
+  useEffect(() => {
+    if (!image) return;
+    section.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    postButton.current?.focus({ preventScroll: true });
+  }, [image]);
   return (
-    <section className="composer card" id="composer">
+    <section className="composer card" id="composer" ref={section}>
       <div className="compose-top">
         <Avatar person={user ?? undefined} />
         <textarea
@@ -66,6 +76,7 @@ export function Composer({
             : "Keep it cheeky. Keep it clothed."}
         </span>
         <button
+          ref={postButton}
           className="primary"
           disabled={submitting || (!draft.trim() && !image)}
           onClick={onSubmit}

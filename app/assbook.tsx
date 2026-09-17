@@ -609,7 +609,7 @@ export default function Assbook() {
           onUse={(url) => {
             setPostImage(url);
             setModal("");
-            toast.success("Photo added.");
+            toast.success("Photo attached. Press Post to share it.");
           }}
           onClose={closeModal}
         />
