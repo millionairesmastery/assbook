@@ -463,11 +463,11 @@ export default function Assbook({
   const finishOnboarding = useCallback(() => {
     setOnboardingClosed(true);
     refreshViewer();
-    revalidateFeed();
     revalidatePeople();
+    // Switching the tab loads the Following feed on its own.
     chooseFeedTab("following");
     toast.success("Your Following feed is filling up.");
-  }, [chooseFeedTab, refreshViewer, revalidateFeed, revalidatePeople]);
+  }, [chooseFeedTab, refreshViewer, revalidatePeople]);
 
   const submitPost = useCallback(() => {
     if (!requireUser()) return;

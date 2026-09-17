@@ -118,8 +118,11 @@ export function useFeed(params: FeedParams) {
             hasMore: fresh.hasMore,
             next: fresh.next,
           };
+          // The tab or view changed while this refresh was in flight: its
+          // answer belongs to a feed nobody is looking at any more.
+          if (current && current.key !== key) return current;
           const edge = fresh.next;
-          if (!current || current.key !== key || !edge) return base;
+          if (!current || !edge) return base;
           const seen = new Set(fresh.posts.map((p) => p.id));
           const tail = current.posts.filter(
             (p) => !seen.has(p.id) && isOlder(p, edge),
