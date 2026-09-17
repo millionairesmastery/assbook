@@ -87,9 +87,11 @@ function once(target: HTMLVideoElement, event: string, ms: number) {
 }
 
 // A still from the clip, which is what the dress-code check actually reads.
-async function drawFrame(video: HTMLVideoElement): Promise<Blob | null> {
-  const width = video.videoWidth;
-  const height = video.videoHeight;
+async function drawFrame(
+  source: HTMLVideoElement | HTMLCanvasElement,
+): Promise<Blob | null> {
+  const width = "videoWidth" in source ? source.videoWidth : source.width;
+  const height = "videoHeight" in source ? source.videoHeight : source.height;
   if (!width || !height) return null;
   const scale = Math.min(1, FRAME_EDGE / Math.max(width, height));
   const canvas = document.createElement("canvas");
@@ -97,7 +99,7 @@ async function drawFrame(video: HTMLVideoElement): Promise<Blob | null> {
   canvas.height = Math.round(height * scale);
   const context = canvas.getContext("2d");
   if (!context) return null;
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
   return new Promise((resolve) =>
     canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.8),
   );
@@ -116,6 +118,49 @@ async function frameAtSecond(video: HTMLVideoElement): Promise<Blob | null> {
     }
   }
   return drawFrame(video);
+}
+
+type Portrait = { canvas: HTMLCanvasElement; stream: MediaStream; stop: () => void };
+
+// Peeks are portrait, 9:16, wherever they are made. A phone camera already
+// gives that. A webcam gives a wide picture, so the middle of it is drawn
+// onto a portrait canvas and the recorder reads the canvas instead. The
+// preview crops the same way, so what is seen is what is kept.
+const PORTRAIT = 9 / 16;
+function portraitSource(video: HTMLVideoElement, stream: MediaStream): Portrait | null {
+  const settings = stream.getVideoTracks()[0]?.getSettings();
+  const width = video.videoWidth || settings?.width || 0;
+  const height = video.videoHeight || settings?.height || 0;
+  if (!width || !height || width / height <= PORTRAIT + 0.01) return null;
+  if (!("captureStream" in HTMLCanvasElement.prototype)) return null;
+  const outHeight = Math.min(height, 1280);
+  const outWidth = Math.round(outHeight * PORTRAIT);
+  const canvas = document.createElement("canvas");
+  canvas.width = outWidth;
+  canvas.height = outHeight;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  const cropWidth = Math.round(height * PORTRAIT);
+  const cropX = Math.round((width - cropWidth) / 2);
+  let live = true;
+  let raf = 0;
+  const draw = () => {
+    if (!live) return;
+    context.drawImage(video, cropX, 0, cropWidth, height, 0, 0, outWidth, outHeight);
+    raf = requestAnimationFrame(draw);
+  };
+  draw();
+  const out = canvas.captureStream(30);
+  for (const track of stream.getAudioTracks()) out.addTrack(track);
+  return {
+    canvas,
+    stream: out,
+    stop: () => {
+      live = false;
+      cancelAnimationFrame(raf);
+      for (const track of out.getVideoTracks()) track.stop();
+    },
+  };
 }
 
 // Clips written by a recorder often arrive without a duration until the
@@ -171,6 +216,7 @@ export function PostPeekDialog({
   const preview = useRef<HTMLVideoElement>(null);
   const player = useRef<HTMLVideoElement>(null);
   const recorder = useRef<MediaRecorder | null>(null);
+  const portrait = useRef<Portrait | null>(null);
   const frame = useRef<Blob | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const counter = useCharCounter();
@@ -250,13 +296,16 @@ export function PostPeekDialog({
     const type = MediaRecorder.isTypeSupported("video/mp4")
       ? "video/mp4"
       : "video/webm";
+    const cropped = preview.current ? portraitSource(preview.current, stream) : null;
     let made: MediaRecorder;
     try {
-      made = new MediaRecorder(stream, { mimeType: type });
+      made = new MediaRecorder(cropped ? cropped.stream : stream, { mimeType: type });
     } catch {
+      cropped?.stop();
       setError("This browser will not record here. Choose a clip instead.");
       return;
     }
+    portrait.current = cropped;
     const parts: Blob[] = [];
     frame.current = null;
     made.ondataavailable = (event) => {
@@ -264,6 +313,8 @@ export function PostPeekDialog({
     };
     made.onstop = () => {
       clearTimers();
+      portrait.current?.stop();
+      portrait.current = null;
       setRecording(false);
       const blob = new Blob(parts, { type });
       setStream(null);
@@ -293,9 +344,9 @@ export function PostPeekDialog({
     // always seekable, and this frame is the one the check will read.
     timers.current.push(
       setTimeout(() => {
-        const video = preview.current;
-        if (video)
-          void drawFrame(video).then((still) => (frame.current = still));
+        const source = portrait.current?.canvas ?? preview.current;
+        if (source)
+          void drawFrame(source).then((still) => (frame.current = still));
       }, 1000),
     );
     timers.current.push(setTimeout(stopRecording, CLIP_MS));
@@ -425,6 +476,7 @@ export function PostPeekDialog({
           )}
           {stream && (
             <div className="peek-camera">
+              <div className="peek-frame">
               <video
                 ref={preview}
                 className={
@@ -476,6 +528,7 @@ export function PostPeekDialog({
                   <b>{Math.ceil(left)}</b>
                 </span>
               )}
+              </div>
               <div className="peek-camera-row">
                 <button
                   className="primary"

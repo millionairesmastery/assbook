@@ -308,7 +308,9 @@ export function PeekViewer({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="peek-overlay"
+        // The dialog centres itself with a translate; the class merger drops
+        // those here so the overlay can cover the whole screen from the corner.
+        className="peek-overlay top-0 left-0 translate-x-0 translate-y-0 w-full max-w-none h-full rounded-none border-0 p-0 gap-0"
         showCloseButton={false}
         aria-describedby={undefined}
       >

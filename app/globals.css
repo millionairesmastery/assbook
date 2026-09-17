@@ -2403,6 +2403,8 @@ button.stat:hover {
   display: block;
   width: 100%;
   height: 100%;
+  /* Portrait stage everywhere. A wide upload plays with dark bars above
+     and below rather than being cut. */
   object-fit: contain;
   background: #000;
 }
@@ -2412,6 +2414,11 @@ button.stat:hover {
   z-index: 1;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
+}
+/* The tap zones are invisible on purpose; a tap must not draw a ring. */
+.peek-zone:focus,
+.peek-zone:focus-visible {
+  outline: none;
 }
 .peek-zone {
   background: none;
@@ -2739,9 +2746,6 @@ button.stat:hover {
     height: 100svh;
     border-radius: 0;
   }
-  .peek-video {
-    object-fit: cover;
-  }
   .peek-icon {
     width: 44px;
     height: 44px;
@@ -2873,13 +2877,38 @@ button.stat:hover {
   margin: -4px 0 0;
   text-align: center;
 }
+.peek-post .peek-camera {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.peek-post .peek-frame {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+}
 .peek-post .peek-preview,
 .peek-post .peek-camera-view {
-  max-height: 34svh;
-  width: 100%;
-  object-fit: contain;
+  display: block;
+  height: 34svh;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  margin: 0 auto;
   background: #000;
   border-radius: 14px;
+}
+/* The camera shows the middle of a wide picture, which is what is recorded. */
+.peek-post .peek-camera-view {
+  object-fit: cover;
+}
+/* A chosen clip may be any shape; it shows the way it will play. */
+.peek-post .peek-preview {
+  object-fit: contain;
+}
+.peek-post .peek-camera-row {
+  width: 100%;
+  justify-content: center;
 }
 .peek-again {
   align-self: flex-start;
@@ -2900,7 +2929,7 @@ button.stat:hover {
 @media (max-width: 650px) {
   .peek-post .peek-preview,
   .peek-post .peek-camera-view {
-    max-height: 30svh;
+    height: 30svh;
   }
   .peek-way {
     min-height: 76px;
