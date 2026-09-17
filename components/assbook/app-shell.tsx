@@ -129,7 +129,7 @@ export function AppShell({
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="join-button">
+                <button className="join-button user-menu">
                   <Avatar person={user} />
                   <span>@{user.handle}</span>
                 </button>

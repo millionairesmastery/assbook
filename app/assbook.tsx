@@ -1042,6 +1042,9 @@ export default function Assbook({
             onRetry={profileView.retry}
             onEdit={() => setModal("edit")}
             onOpenSecurity={() => setModal("security")}
+            onOpenBlocked={() => setModal("blocked")}
+            onOpenModeration={() => setModal("moderation")}
+            onSignOut={signOut}
             onOpenFollowers={() => setFollowList("followers")}
             onOpenFollowing={() => setFollowList("following")}
             tab={profileTab}

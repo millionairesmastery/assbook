@@ -1,11 +1,5 @@
 "use client";
-import {
-  CalendarDays,
-  Link as LinkIcon,
-  Loader2,
-  RefreshCw,
-  ShieldCheck,
-} from "lucide-react";
+import { Ban, CalendarDays, Gavel, Link as LinkIcon, Loader2, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar } from "@/components/assbook/avatar";
 import { NameBadge } from "@/components/assbook/account-badge";
@@ -20,6 +14,9 @@ export function ProfileCard({
   onRetry,
   onEdit,
   onOpenSecurity,
+  onOpenBlocked,
+  onOpenModeration,
+  onSignOut,
   onOpenFollowers,
   onOpenFollowing,
   tab,
@@ -36,6 +33,10 @@ export function ProfileCard({
   onRetry: () => void;
   onEdit: () => void;
   onOpenSecurity: () => void;
+  /** The account menu lives here on a phone, where the top bar has no room. */
+  onOpenBlocked: () => void;
+  onOpenModeration: () => void;
+  onSignOut: () => void;
   onOpenFollowers: () => void;
   onOpenFollowing: () => void;
   /** "posts" or "saved", on your own profile only. */
@@ -113,6 +114,20 @@ export function ProfileCard({
               <button className="text-link" onClick={onOpenSecurity}>
                 <ShieldCheck size={15} aria-hidden="true" />
                 Account security
+              </button>
+              <button className="text-link" onClick={onOpenBlocked}>
+                <Ban size={15} aria-hidden="true" />
+                Blocked accounts
+              </button>
+              {viewer?.isAdmin && (
+                <button className="text-link" onClick={onOpenModeration}>
+                  <Gavel size={15} aria-hidden="true" />
+                  Moderation queue
+                </button>
+              )}
+              <button className="text-link" onClick={onSignOut}>
+                <LogOut size={15} aria-hidden="true" />
+                Sign out
               </button>
             </>
           ) : (

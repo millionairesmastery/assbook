@@ -3045,3 +3045,14 @@ button.stat:hover {
   font-size: 20px;
   flex: none;
 }
+
+/* On a phone the bottom bar already leads to your profile, so the top bar
+   keeps only the bell on the right. The account menu moves onto the profile. */
+@media (max-width: 650px) {
+  .topbar .user-menu {
+    display: none;
+  }
+  .topbar .bell-button {
+    margin-left: auto;
+  }
+}
