@@ -96,14 +96,6 @@ export function LandingPage({
               Read the whole story
             </Link>
           </p>
-          <div className="landing-actions">
-            <button type="button" className="primary" onClick={onJoin}>
-              Join the backside
-            </button>
-            <button type="button" className="text-link" onClick={onSignIn}>
-              Already here? Sign in
-            </button>
-          </div>
           <ul className="landing-features">
             {features.map(({ icon: Icon, label, detail }) => (
               <li key={label}>

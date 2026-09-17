@@ -2043,21 +2043,6 @@ button.stat:hover {
   max-width: 46ch;
   margin: clamp(8px, 1.4vh, 14px) 0 0;
 }
-.landing-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 20px;
-  margin: clamp(12px, 2.2vh, 24px) 0 0;
-}
-.landing-actions .primary {
-  min-height: 48px;
-  padding: 0 22px;
-  font-size: 16px;
-}
-.landing-actions .text-link {
-  min-height: 44px;
-}
 .landing-features {
   list-style: none;
   margin: clamp(14px, 2.6vh, 28px) 0 0;
@@ -3264,20 +3249,6 @@ button.stat:hover {
     order: 3;
     margin: 0;
     font-size: 17px;
-  }
-  .landing-actions {
-    order: 4;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    margin: 4px 0 0;
-  }
-  .landing-actions .primary {
-    width: 100%;
-    min-height: 48px;
-  }
-  .landing-actions .text-link {
-    align-self: center;
   }
   .landing-art {
     order: 5;
