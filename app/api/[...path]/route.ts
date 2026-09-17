@@ -34,7 +34,7 @@ const blockClause =
 // One post row as the client sees it. Binds, in order: the official handle,
 // two viewer ids for the reply count, one for liked, one for saved.
 const postSelect =
-  "SELECT p.id,p.user_id,p.body,p.image,p.created,p.pinned,u.handle,u.name,u.avatar,u.demo,(u.handle=?) official,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE ";
+  "SELECT p.id,p.user_id,p.body,p.image,p.created,p.pinned,p.edited_at,u.handle,u.name,u.avatar,u.demo,(u.handle=?) official,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE ";
 // One person row. Binds: the official handle, then the viewer id.
 const personSelect =
   "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,(u.handle=?) official,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u ";
@@ -53,6 +53,7 @@ const writePaths = [
   "report",
   "admin",
 ];
+const EDIT_WINDOW_MS = 15 * 60000;
 function moderation(action: string, by: string, post: string) {
   console.log(JSON.stringify({ event: "moderation", action, by, post }));
 }
@@ -457,6 +458,25 @@ async function handle(req: Request) {
         .bind(id, user.id, text, image, Date.now())
         .run();
       return json({ id }, 201);
+    }
+    if (path[0] === "posts" && method === "PUT") {
+      // Authors can fix the text for 15 minutes after posting. The photo
+      // stays, and the card shows that the post was edited.
+      const d = await body(req);
+      const text = str(d.body, 500);
+      const current = await db()
+        .prepare("SELECT image,created FROM posts WHERE id=? AND user_id=? AND deleted=0")
+        .bind(uuid(path[1]), user.id)
+        .first<{ image: string | null; created: number }>();
+      if (!current) throw new HttpError(404, "This post is unavailable.");
+      if (Date.now() - current.created > EDIT_WINDOW_MS)
+        throw new HttpError(400, "Posts can be edited for 15 minutes. This one has settled.");
+      if (!text && !current.image) throw new HttpError(400, "Add a thought or keep the photo.");
+      await db()
+        .prepare("UPDATE posts SET body=?,edited_at=? WHERE id=? AND user_id=?")
+        .bind(text, Date.now(), path[1], user.id)
+        .run();
+      return json({ ok: true, edited_at: Date.now() });
     }
     if (path[0] === "posts" && method === "DELETE") {
       const removed = await db()

@@ -55,6 +55,8 @@ export const posts = sqliteTable(
     deleted: integer().notNull().default(0),
     // Pinned posts sit at the top of the main feed. Only the moderator pins.
     pinned: integer().notNull().default(0),
+    // Set when the author edits the text (allowed for 15 minutes after posting).
+    editedAt: integer("edited_at"),
   },
   (t) => [
     index("posts_created").on(t.created),

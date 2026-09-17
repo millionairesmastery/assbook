@@ -19,6 +19,7 @@ export type PostCardProps = {
   onReplies: (post: Post) => void;
   onShare: (post: Post) => void;
   onVisitProfile: (handle: string) => void;
+  onEdit: (post: Post) => void;
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
   onBlock: (post: Post) => void;
@@ -37,12 +38,15 @@ export const PostCard = memo(function PostCard({
   onReplies,
   onShare,
   onVisitProfile,
+  onEdit,
   onDelete,
   onReport,
   onBlock,
   onPin,
 }: PostCardProps) {
   const isOwn = viewer?.id === post.user_id;
+  // Authors can fix the words for 15 minutes after posting.
+  const canEdit = isOwn && now - post.created < 15 * 60000;
   return (
     <article className="post card" id={"post-" + post.id}>
       {post.pinned === 1 && (
@@ -69,6 +73,7 @@ export const PostCard = memo(function PostCard({
           </b>
           <span className="person-meta">
             @{post.handle} · {age(post.created, now)}
+            {post.edited_at ? " · edited" : ""}
           </span>
         </button>
         <button
@@ -87,8 +92,10 @@ export const PostCard = memo(function PostCard({
         <PostMenu
           post={post}
           isOwn={isOwn}
+          canEdit={canEdit}
           canPin={!!viewer?.isAdmin}
           pinPending={pinPending}
+          onEdit={onEdit}
           onDelete={onDelete}
           onReport={onReport}
           onBlock={onBlock}

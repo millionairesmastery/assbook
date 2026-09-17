@@ -1,0 +1,1 @@
+ALTER TABLE `posts` ADD `edited_at` integer;

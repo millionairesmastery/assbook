@@ -29,6 +29,7 @@ import {
   type EmailConfirmation,
 } from "@/components/assbook/auth/email-confirmed-dialog";
 import { ReportDialog } from "@/components/assbook/moderation/report-dialog";
+import { EditPostDialog } from "@/components/assbook/feed/edit-post-dialog";
 import { ModerationQueueDialog } from "@/components/assbook/moderation/moderation-queue-dialog";
 import { RepliesDialog } from "@/components/assbook/replies/replies-dialog";
 import {
@@ -125,6 +126,7 @@ export default function Assbook({
   const [onboardingClosed, setOnboardingClosed] = useState(false);
   const [replyPost, setReplyPost] = useState<Post | null>(null);
   const [reportPost, setReportPost] = useState<Post | null>(null);
+  const [editPost, setEditPost] = useState<Post | null>(null);
   const [shareLink, setShareLink] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -510,6 +512,11 @@ export default function Assbook({
     view,
   ]);
 
+  const openEdit = useCallback((post: Post) => {
+    setEditPost(post);
+    setModal("edit-post");
+  }, []);
+
   const deletePost = useCallback(
     (post: Post) => {
       void run("delete:" + post.id, async () => {
@@ -755,6 +762,17 @@ export default function Assbook({
           onClose={closeModal}
         />
       )}
+      {modal === "edit-post" && editPost && (
+        <EditPostDialog
+          post={editPost}
+          onSaved={(post, body, editedAt) => {
+            patchPost(post.id, { body, edited_at: editedAt });
+            closeModal();
+            toast.success("Words updated.");
+          }}
+          onClose={closeModal}
+        />
+      )}
       {modal === "report" && reportPost && (
         <ReportDialog post={reportPost} onClose={closeModal} />
       )}
@@ -967,6 +985,7 @@ export default function Assbook({
             onReplies={openReplies}
             onShare={share}
             onVisitProfile={visitProfile}
+            onEdit={openEdit}
             onDelete={deletePost}
             onReport={openReport}
             onBlock={blockAuthor}

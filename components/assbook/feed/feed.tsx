@@ -37,6 +37,7 @@ export type FeedProps = {
   onReplies: (post: Post) => void;
   onShare: (post: Post) => void;
   onVisitProfile: (handle: string) => void;
+  onEdit: (post: Post) => void;
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
   onBlock: (post: Post) => void;
@@ -70,6 +71,7 @@ export function Feed({
   onReplies,
   onShare,
   onVisitProfile,
+  onEdit,
   onDelete,
   onReport,
   onBlock,
@@ -176,6 +178,7 @@ export function Feed({
             onReplies={onReplies}
             onShare={onShare}
             onVisitProfile={onVisitProfile}
+            onEdit={onEdit}
             onDelete={onDelete}
             onReport={onReport}
             onBlock={onBlock}

@@ -154,6 +154,11 @@ try {
   );
   assert.equal((await req(anon, "feed?post=" + p.id)).posts[0].id, p.id);
   await req(b, "posts/" + p.id, "DELETE", undefined, 404);
+  await req(b, "posts/" + p.id, "PUT", { body: "Not mine to edit" }, 404);
+  await req(a, "posts/" + p.id, "PUT", { body: "Edited smoke test " + suffix });
+  const edited = (await req(anon, "feed?post=" + p.id)).posts[0];
+  assert.equal(edited.body, "Edited smoke test " + suffix);
+  assert.ok(edited.edited_at > 0, "Edited posts carry a timestamp");
   assert.equal((await req(anon, "feed?post=" + p.id)).posts.length, 1);
   await req(anon, "nonexistent", "GET", undefined, 404);
   await req(a, "comments", "GET", undefined, 404);

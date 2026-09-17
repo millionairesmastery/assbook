@@ -23,6 +23,7 @@ export type Post = {
   image: string | null;
   created: number;
   pinned: number;
+  edited_at: number | null;
   handle: string;
   name: string;
   avatar: string | null;

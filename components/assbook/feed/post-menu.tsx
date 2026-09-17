@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Ban, Flag, MoreHorizontal, Pin, PinOff, Trash2 } from "lucide-react";
+import { Ban, Flag, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +13,10 @@ import type { Post } from "@/lib/types";
 export function PostMenu({
   post,
   isOwn,
+  canEdit,
   canPin,
   pinPending,
+  onEdit,
   onDelete,
   onReport,
   onBlock,
@@ -22,8 +24,10 @@ export function PostMenu({
 }: {
   post: Post;
   isOwn: boolean;
+  canEdit: boolean;
   canPin: boolean;
   pinPending: boolean;
+  onEdit: (post: Post) => void;
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
   onBlock: (post: Post) => void;
@@ -81,10 +85,18 @@ export function PostMenu({
             </DropdownMenuItem>
           )}
           {isOwn ? (
-            <DropdownMenuItem onSelect={() => ask("delete")}>
-              <Trash2 size={15} aria-hidden="true" />
-              Remove your post
-            </DropdownMenuItem>
+            <>
+              {canEdit && (
+                <DropdownMenuItem onSelect={() => onEdit(post)}>
+                  <Pencil size={15} aria-hidden="true" />
+                  Edit the words
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={() => ask("delete")}>
+                <Trash2 size={15} aria-hidden="true" />
+                Remove your post
+              </DropdownMenuItem>
+            </>
           ) : (
             !isOfficial && (
               <>
