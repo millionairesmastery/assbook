@@ -7,21 +7,25 @@ photo is your own fully clothed behind. No face recognition. Just hindsight.
 
 ## What works
 
-- Handle/password accounts, sign-in, sign-out, and 30-day HttpOnly sessions.
+- Handle/password accounts, sign-in, sign-out, and seven-day HttpOnly sessions.
+- Verified recovery email, expiring password-reset links, password changes, and
+  signing out other sessions. Email addresses stay off public profiles.
 - Persistent profiles, bios, and photo uploads.
 - A chronological feed, following feed, search, and shareable post/profile links.
 - Posts, replies, likes, bookmarks, follows, blocks, and post reports.
 - An optional moderator queue for hiding reported posts.
 - Responsive desktop/mobile UI, accessible dialogs, keyboard navigation.
 - Downloadable source, generated from the same checkout.
-- No AI API keys or paid third-party integrations required.
+- Local email simulation requires no service credentials. Live delivery uses
+  Cloudflare Email Sending and requires sender-domain setup.
 
 Demo profiles and posts are optional and clearly labeled. They cannot sign in.
 
 ## Stack
 
 React + TypeScript + vinext (Next.js-compatible app routing), Cloudflare Workers,
-D1 (SQLite), R2, Tailwind, Radix/Shadcn primitives, and Lucide icons.
+D1 (SQLite), R2, Cloudflare Email Sending, Tailwind, Radix/Shadcn primitives, and Lucide icons.
+The installed vinext version is 1.0.0-beta.5.
 
 The frontend and API run on one Cloudflare Worker. Static assets use Workers
 Static Assets; the API uses D1 and R2 bindings. This checkout is prepared for
@@ -30,7 +34,8 @@ ChatGPT authentication.
 
 ## Local development
 
-Requires Node.js 22.13+ and npm. Python 3 is used only for the optional source ZIP.
+Requires Node.js 22.13+ and npm. Python 3 is used for the optional source ZIP
+and the authentication integration test's disposable database fixtures.
 
 ```sh
 npm ci
@@ -48,12 +53,19 @@ npm run typecheck
 npm run build
 ASSBOOK_TEST_URL=http://localhost:5174 npm run test:smoke
 npm run source:zip
+ASSBOOK_TEST_URL=http://localhost:5174 npm run test:auth
 ```
 
 The smoke test accepts loopback URLs only, creates disposable accounts, checks
 the actual API and storage behavior, and cleans up its accounts. Use the port
 printed by your local server. Restart the preview after changing dependencies
 or Cloudflare configuration.
+
+Local verification/recovery emails are simulated. Wrangler prints paths to text
+files under `.wrangler/tmp/email`; open a link from one of those files to verify
+an email or reset a password. No email is sent to an actual inbox. Never enable
+remote bindings when running the integration tests. The auth test checks expiry,
+concurrent replay, session revocation, and legacy password upgrades.
 
 ## Deploy to your Cloudflare account
 
@@ -65,9 +77,13 @@ or Cloudflare configuration.
 4. Run `npm run db:remote` to apply the schema to your new database.
 5. Optionally add the labeled demo content:
    `npx wrangler d1 execute DB --remote --config wrangler.jsonc --file db/seed.sql`.
-6. Run `npm run source:zip`, then `npm run deploy`.
-7. Open the Worker URL printed by Wrangler and create your own account.
-8. Set `ADMIN_HANDLE` in `wrangler.jsonc` to that existing account's handle,
+6. Enable Cloudflare Email Sending for your own domain and verify its DNS records.
+   Set `APP_ORIGIN` to the app's HTTPS address and `EMAIL_FROM` to a sender on
+   that verified domain. The checked-in `.example` values are placeholders.
+7. Run `npm run source:zip`, then `npm run deploy`.
+8. Open your app, create an account, and test email verification and password
+   recovery using a real mailbox you control.
+9. Set `ADMIN_HANDLE` in `wrangler.jsonc` to that existing account's handle,
    then redeploy. The account menu will show the moderation queue.
 
 Do not configure a moderator handle until you own that handle. Do not put
@@ -93,11 +109,14 @@ This is a working first version, not a claim of readiness for a mass launch.
   automated image moderation**. Reports require an operator to review them.
 - Configure a moderator and add an operational moderation process before
   inviting the public. Profile-photo reports are not yet a separate workflow.
-- There is no password reset, email verification, account deletion UI, or
-  two-factor authentication yet. Save your password.
-- Passwords use salted PBKDF2-SHA-256 (100,000 iterations, the Web Crypto
-  runtime-compatible value). Review stronger password hashing or an established
-  identity provider before a large public launch.
+- Existing accounts must add and verify a recovery email from Account security.
+  Accounts without one cannot use email recovery. MFA/passkeys and account
+  deletion are not implemented yet.
+- Passwords use salted scrypt (N=16384, r=8, p=5). Legacy PBKDF2 passwords
+  upgrade after successful sign-in. New passwords require 15–128 characters.
+  See [SECURITY.md](SECURITY.md) for the security model and remaining boundaries.
+- Apply all migrations before deploying: `0001_solid_blue_blade.sql` adds email,
+  account versions, and recovery-token storage without removing existing users.
 - Same-origin write checks, bounded uploads, file-signature checks, ownership
   checks, hashed session tokens, and application rate limits are included.
   Add an edge bot challenge and tune limits for your deployment.
@@ -107,7 +126,7 @@ This is a working first version, not a claim of readiness for a mass launch.
   inactive accounts is an operator decision.
 - Feed pagination is a bounded offset implementation. Search is simple SQLite
   text matching; adapt these when you have enough real traffic to measure.
-- No emails, private messaging, push notifications, or recommendation algorithm.
+- No private messaging, push notifications, or recommendation algorithm.
 
 ## Open source
 
@@ -126,10 +145,13 @@ or credentials. Set up your own database and bucket when self-hosting.
 - `app/globals.css`: visual system and responsive styles.
 - `app/api/[...path]/route.ts`: HTTP API and permission checks.
 - `lib/server.ts`: storage access, sessions, validation, rate limiting.
+- `lib/auth.ts`, `lib/password.ts`: recovery, email verification, password security.
+- `app/account-security.tsx`: recovery and account-security screens.
 - `db/schema.ts`, `drizzle/`: database schema and immutable migrations.
 - `db/seed.sql`: optional clearly labeled sample profiles/posts.
 - `wrangler.jsonc`: Cloudflare source configuration.
 - `scripts/smoke-test.mjs`: local API integration checks.
+- `scripts/auth-test.mjs`: local account-security integration checks.
 
 Official deployment reference:
 [Cloudflare Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/).

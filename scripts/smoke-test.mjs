@@ -68,6 +68,7 @@ try {
       name: "Local test " + i,
       handle: handles[i],
       password,
+      email: handles[i] + "@example.com",
       rules: true,
     });
   const au = (await req(a, "me")).user,

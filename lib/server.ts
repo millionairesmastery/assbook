@@ -58,10 +58,9 @@ export async function body(req: Request) {
   if (!req.headers.get("content-type")?.startsWith("application/json"))
     throw new HttpError(415, "Send JSON.");
   try {
-    return JSON.parse(new TextDecoder().decode(await readBody(req))) as Record<
-      string,
-      unknown
-    >;
+    const value: unknown = JSON.parse(new TextDecoder().decode(await readBody(req)));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, "Invalid request.");
+    return value as Record<string, unknown>;
   } catch (e) {
     if (e instanceof HttpError) throw e;
     throw new HttpError(400, "Invalid request.");
@@ -85,7 +84,7 @@ export async function hash(s: string) {
     .map((v) => v.toString(16).padStart(2, "0"))
     .join("");
 }
-export async function passwordHash(password: string, salt: string) {
+export async function legacyPasswordHash(password: string, salt: string) {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(password),
@@ -144,7 +143,7 @@ export async function viewer(req: Request) {
   if (!/^[a-f0-9-]{72}$/.test(token)) return null;
   const user = await db()
     .prepare(
-      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>?",
+      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND s.auth_version=u.auth_version",
     )
     .bind(await hash(token), Date.now())
     .first<Profile>();
@@ -179,15 +178,16 @@ export async function rate(key: string, max = 30, windowMs = 60000) {
   if (result && result.count > max)
     throw new HttpError(429, "A little breather. Please try again shortly.");
 }
-export async function newSession(req: Request, id: string) {
+export async function newSession(req: Request, id: string, version: number) {
   const token = crypto.randomUUID() + crypto.randomUUID();
-  await db().batch([
+  const result = await db().batch([
     db().prepare("DELETE FROM sessions WHERE expires<?").bind(Date.now()),
     db().prepare("DELETE FROM limits WHERE expires<?").bind(Date.now()),
     db()
-      .prepare("INSERT INTO sessions(token,user_id,expires) VALUES(?,?,?)")
-      .bind(await hash(token), id, Date.now() + 30 * 86400000),
+      .prepare("INSERT INTO sessions(token,user_id,expires,auth_version) SELECT ?,id,?,auth_version FROM users WHERE id=? AND auth_version=?")
+      .bind(await hash(token), Date.now() + 7 * 86400000, id, version),
   ]);
+  if (!result[2].meta.changes) throw new HttpError(401, "Your account changed. Please sign in again.");
   return cookie(req, token);
 }
 export function cookie(req: Request, token: string) {
@@ -195,7 +195,7 @@ export function cookie(req: Request, token: string) {
     "assbook_session=" +
     token +
     "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" +
-    (token ? "2592000" : "0") +
+    (token ? "604800" : "0") +
     (new URL(req.url).protocol === "https:" ? "; Secure" : "")
   );
 }

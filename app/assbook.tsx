@@ -1,4 +1,5 @@
 "use client";
+import { AccountSecurity, AccountRecovery } from "./account-security";
 import { useEffect, useRef, useState } from "react";
 import {
   Home,
@@ -24,8 +25,8 @@ import {
   Loader2,
   Camera,
   X,
-  Download,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -151,6 +152,7 @@ export default function Assbook() {
       handle: string;
     }[]
   >([]);
+  const [recoveryToken, setRecoveryToken] = useState("");
   const draftRef = useRef<HTMLTextAreaElement>(null);
   const refresh = () => setRevision((n) => n + 1);
   const show = (name: string) => {
@@ -175,6 +177,22 @@ export default function Assbook() {
       setBusy(false);
     }
   };
+  useEffect(() => {
+    const readLink = () => {
+      const fragment = new URLSearchParams(location.hash.slice(1));
+      for (const mode of ["reset", "verify"]) {
+        const token = fragment.get(mode);
+        if (token) {
+          setRecoveryToken(token); setModal(mode); setFormError("");
+          history.replaceState(null, "", location.pathname + location.search);
+          break;
+        }
+      }
+    };
+    readLink();
+    window.addEventListener("hashchange", readLink);
+    return () => window.removeEventListener("hashchange", readLink);
+  }, []);
   useEffect(() => {
     api<{ user: Profile | null }>("me")
       .then((d) => setUser(d.user))
@@ -513,6 +531,7 @@ export default function Assbook() {
                   Your profile
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={edit}>Edit profile</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => show("security")}>Account security</DropdownMenuItem>
                 <DropdownMenuItem onClick={listBlocked}>
                   Blocked accounts
                 </DropdownMenuItem>
@@ -1005,6 +1024,10 @@ export default function Assbook() {
                         authMode === "signup"
                           ? "Welcome to the backside."
                           : "Look who’s back.",
+                      security: "Keep your account yours.",
+                      recover: "Let’s get you back in.",
+                      reset: "Choose a new password.",
+                      verify: "Verify your recovery email.",
                       edit: "Your best side.",
                       upload: "Pants on. Camera ready.",
                       replies: "Behind the scenes.",
@@ -1024,6 +1047,10 @@ export default function Assbook() {
                   (
                     {
                       auth: "Good people. Bad puns. You’ll fit right in.",
+                      security: "Recovery email, password, and signed-in sessions.",
+                      recover: "We’ll email a link if your address is verified on an account.",
+                      reset: "A fresh password for your backside.",
+                      verify: "One last step to enable account recovery.",
                       edit: "A little personality goes a long way.",
                       upload: "Only your own photos. Fully clothed, always.",
                       replies: "Add something kind. Or a truly terrible pun.",
@@ -1052,7 +1079,8 @@ export default function Assbook() {
                   e.preventDefault();
                   const data = new FormData(e.currentTarget);
                   void run(async () => {
-                    await api(authMode, "POST", {
+                    const result = await api<{ verificationSent?: boolean }>(authMode, "POST", {
+                      email: data.get("email"),
                       name: data.get("name"),
                       handle: data.get("handle"),
                       password: data.get("password"),
@@ -1060,7 +1088,8 @@ export default function Assbook() {
                     });
                     const d = await api<{ user: Profile }>("me");
                     setUser(d.user);
-                    setModal("");
+                    setModal(authMode === "signup" ? "security" : "");
+                    if (authMode === "signup" && !result.verificationSent) toast.error("Your account is created, but email could not be sent. Retry from Account security.");
                     refresh();
                     toast.success(
                       authMode === "signup"
@@ -1082,6 +1111,7 @@ export default function Assbook() {
                     />
                   </label>
                 )}
+                {authMode === "signup" && <label>Your email<input name="email" type="email" required maxLength={254} autoComplete="email" placeholder="you@example.com" /></label>}
                 <label>
                   Your handle
                   <input
@@ -1100,14 +1130,14 @@ export default function Assbook() {
                     name="password"
                     type="password"
                     required
-                    minLength={12}
+                    minLength={authMode === "signup" ? 15 : 1}
                     maxLength={128}
                     autoComplete={
                       authMode === "signup"
                         ? "new-password"
                         : "current-password"
                     }
-                    placeholder="At least 12 characters"
+                    placeholder={authMode === "signup" ? "At least 15 characters" : "Your password"}
                   />
                 </label>
                 {authMode === "signup" && (
@@ -1124,8 +1154,7 @@ export default function Assbook() {
                       </span>
                     </label>
                     <p className="small muted">
-                      Keep your password safe. Email recovery isn’t available in
-                      this beta.
+                      We’ll send a verification link to enable account recovery. Your email is never shown on your profile.
                     </p>
                   </>
                 )}
@@ -1149,6 +1178,7 @@ export default function Assbook() {
                     ? "Already here? Sign in."
                     : "New here? Grab a handle."}
                 </button>
+                {authMode === "login" && <button type="button" className="text-link centered" onClick={() => show("recover")}>Forgot your password?</button>}
                 <button
                   className="small muted"
                   type="button"
@@ -1158,6 +1188,12 @@ export default function Assbook() {
                 </button>
               </form>
             )}
+            {modal === "security" && user && <AccountSecurity signedOut={() => {
+              setUser(null); setAuthMode("login"); show("auth"); refresh(); toast.success("Password changed. Please sign in again.");
+            }} />}
+            {["recover", "reset", "verify"].includes(modal) && <AccountRecovery key={modal} mode={modal} token={recoveryToken}
+              recover={() => {setRecoveryToken(""); show("recover");}}
+              done={(message) => {setRecoveryToken(""); setUser(null); setAuthMode("login"); show("auth"); refresh(); toast.success(message);}} />}
             {modal === "edit" && (
               <form
                 className="form-stack"

@@ -1105,3 +1105,7 @@ h2 {
     text-overflow: ellipsis;
   }
 }
+
+.account-security section + section { border-top: 1px solid #e8e3df; padding-top: 22px; margin-top: 6px; }
+.account-security h3 { font-weight: 700; }
+.security-notice { background: #fff4e9; border: 1px solid #f4d3b8; border-radius: 12px; padding: 12px; font-size: 14px; overflow-wrap: anywhere; }

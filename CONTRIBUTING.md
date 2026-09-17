@@ -5,7 +5,8 @@ Thanks for getting behind the project.
 1. Fork the repository and create a branch for one focused change.
 2. Follow the local setup in README.md.
 3. Keep interface copy friendly, accessible, and a little silly.
-4. Run `npm run typecheck`, `npm run build`, and the local smoke test.
+4. Run `npm run typecheck`, `npm run build`, and the local smoke test. For account
+   changes, also run `npm run test:auth` with simulated email bindings.
 5. Open a pull request explaining the change and how you checked it.
 
 No body shaming, harassment, sexual imagery, spam, or photos shared without

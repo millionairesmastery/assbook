@@ -1,3 +1,4 @@
+import { authRoute } from "@/lib/auth";
 import { env } from "cloudflare:workers";
 import {
   db,
@@ -6,13 +7,10 @@ import {
   body,
   str,
   hash,
-  passwordHash,
-  equal,
   viewer,
   requireUser,
   sameOrigin,
   rate,
-  newSession,
   cookie,
   sessionToken,
   ownImage,
@@ -30,64 +28,8 @@ async function handle(req: Request) {
     const me = await viewer(req),
       uid = me?.id ?? "";
     if (path[0] === "me" && method === "GET") return json({ user: me });
-    if (["signup", "login"].includes(path[0]) && method === "POST") {
-      await rate(
-        "auth:" + (await hash(req.headers.get("cf-connecting-ip") ?? "local")),
-        10,
-        600000,
-      );
-      const data = await body(req),
-        handle = str(data.handle, 24, 3).toLowerCase(),
-        password = str(data.password, 128, 12);
-      if (!/^[a-z0-9_]{3,24}$/.test(handle))
-        throw new HttpError(400, "Use 3–24 letters, numbers, or underscores.");
-      let id: string;
-      if (path[0] === "signup") {
-        if (data.rules !== true)
-          throw new HttpError(400, "Please agree to the community rules.");
-        const name = str(data.name, 40, 1),
-          salt = crypto.randomUUID();
-        id = crypto.randomUUID();
-        if (["admin", "assbook", "support", "moderator"].includes(handle))
-          throw new HttpError(400, "Please choose another handle.");
-        try {
-          await db()
-            .prepare(
-              "INSERT INTO users(id,handle,name,password,salt,created) VALUES(?,?,?,?,?,?)",
-            )
-            .bind(
-              id,
-              handle,
-              name,
-              await passwordHash(password, salt),
-              salt,
-              Date.now(),
-            )
-            .run();
-        } catch (e) {
-          if (String(e).includes("UNIQUE"))
-            throw new HttpError(409, "That handle is already taken.");
-          throw e;
-        }
-      } else {
-        const u = await db()
-          .prepare(
-            "SELECT id,password,salt FROM users WHERE handle=? AND demo=0",
-          )
-          .bind(handle)
-          .first<{ id: string; password: string; salt: string }>();
-        const candidate = await passwordHash(
-          password,
-          u?.salt ?? "unregistered-account",
-        );
-        if (!u || !(await equal(candidate, u.password)))
-          throw new HttpError(401, "That handle and password do not match.");
-        id = u.id;
-      }
-      return json({ ok: true }, 200, {
-        "Set-Cookie": await newSession(req, id),
-      });
-    }
+    const authResponse = await authRoute(req, url.pathname.slice(5));
+    if (authResponse) return authResponse;
     if (path[0] === "logout" && method === "POST") {
       await db()
         .prepare("DELETE FROM sessions WHERE token=?")

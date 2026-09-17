@@ -8,6 +8,13 @@
       "when": 1789553456974,
       "tag": "0000_sturdy_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789582773812,
+      "tag": "0001_solid_blue_blade",
+      "breakpoints": true
     }
   ]
 }

@@ -15,6 +15,8 @@ export const users = sqliteTable("users", {
   salt: text(),
   demo: integer().notNull().default(0),
   created: integer().notNull(),
+  email: text().unique(),
+  authVersion: integer("auth_version").notNull().default(0),
 });
 export const sessions = sqliteTable(
   "sessions",
@@ -24,6 +26,7 @@ export const sessions = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     expires: integer().notNull(),
+    authVersion: integer("auth_version").notNull().default(0),
   },
   (t) => [index("sessions_expiry").on(t.expires)],
 );
@@ -140,3 +143,12 @@ export const limits = sqliteTable(
   },
   (t) => [index("limits_expiry").on(t.expires)],
 );
+
+export const authTokens = sqliteTable("auth_tokens", {
+  token: text().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  email: text().notNull(),
+  purpose: text().notNull(),
+  authVersion: integer("auth_version").notNull(),
+  expires: integer().notNull(),
+}, (t) => [index("auth_tokens_user").on(t.userId, t.purpose), index("auth_tokens_expiry").on(t.expires)]);
