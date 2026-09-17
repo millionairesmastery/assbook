@@ -38,9 +38,14 @@ const CLOTHED_WORDS =
 // Garments or words that mean bare skin or nothing but underwear or swimwear.
 const BARE_WORDS =
   /\b(nothing|none|bare|naked|nude|skin|underwear|panties|briefs|boxers|thong|g-string|lingerie|bikini|swimsuit|swimwear|swim trunks|trunks|speedo|towel)\b/i;
-// Words in the model's own description that contradict a "clothed" verdict.
+// Words in the model's own description that mean nudity. These reject on
+// their own: the model's yes/no flags have said "no bare skin" for photos it
+// described as showing buttocks, so the description is what counts.
+const NUDITY_WORDS =
+  /\b(nude|naked|nudity|undressed|unclothed|no clothes|without clothes|genital|genitals|penis|vulva|nipple|nipples|breasts?|topless|thong|g-string|bare (buttocks|bottom|butt|behind|rear|skin)|(buttocks|bottom|butt|behind|rear|cheeks)\b[^.]{0,40}\b(shown|visible|exposed|bare|uncovered|revealed))\b/i;
+// Words that mean bare skin or nothing but underwear or swimwear.
 const SKIN_WORDS =
-  /\b(nude|naked|nudity|bare (buttocks|bottom|butt|skin)|buttocks|genital|topless|shirtless|underwear|lingerie|thong|bikini|swimsuit|swimwear|towel|undressed|unclothed|no clothes|without clothes)\b/i;
+  /\b(buttocks|shirtless|bare (back|chest|torso)|underwear|panties|briefs|boxers|lingerie|bikini|swimsuit|swimwear|swim trunks|towel)\b/i;
 
 type Answer = {
   description?: string;
@@ -139,7 +144,10 @@ function isAnswer(value: unknown): value is Answer {
 
 function decide(answer: Answer | null, target: PhotoTarget): PhotoVerdict {
   if (!answer)
-    return { verdict: "unsure", reason: "The automatic check could not read this photo." };
+    return {
+      verdict: "reject",
+      reason: "We could not check this photo just now. Please try again in a moment.",
+    };
   const sure = answer.confidence === "high";
   const people = Number(answer.people) || 0;
   const clothing = String(answer.clothing ?? "").toLowerCase();
@@ -153,25 +161,30 @@ function decide(answer: Answer | null, target: PhotoTarget): PhotoVerdict {
   const bare = flag(answer.buttocks_bare) || lowerNude;
   const underwear = flag(answer.underwear_only) || lowerBare;
   const seen = description ? " The check saw: " + description.slice(0, 140) : "";
-  if (clothing === "nude" || sexual || bare)
+  const garmentNamed = CLOTHED_WORDS.test(lower);
+  // Nudity in any form, at any confidence, is a rejection. Nothing is stored.
+  if (clothing === "nude" || sexual || bare || NUDITY_WORDS.test(description))
     return {
-      verdict: sure ? "reject" : "unsure",
-      reason: sure
-        ? "This looks like it shows nudity or sexual content, which is not allowed here."
-        : "The automatic check thought this might show nudity." + seen,
+      verdict: "reject",
+      reason: "This looks like it shows nudity or sexual content, which is not allowed here.",
     };
-  // Underwear, swimwear, or a description that mentions skin: never a clean
-  // pass. Profile photos get rejected outright, post photos wait for review.
-  if (clothing === "revealing" || underwear || SKIN_WORDS.test(description))
-    return target === "avatar" && sure && (clothing === "revealing" || underwear)
+  // Bare skin, underwear or swimwear: a profile photo is rejected, a post
+  // photo is stored but waits for a moderator. A mention of buttocks with no
+  // real garment named counts as bare.
+  const skin =
+    clothing === "revealing" ||
+    underwear ||
+    SKIN_WORDS.test(description) ||
+    (people > 0 && !garmentNamed && /\b(buttocks|bottom|butt|behind|rear)\b/i.test(description));
+  if (skin)
+    return target === "avatar"
       ? {
           verdict: "reject",
           reason: "A profile photo has to be your own fully clothed behind. Underwear and swimwear do not count.",
         }
       : { verdict: "unsure", reason: "The automatic check saw revealing clothing or bare skin." + seen };
   if (target === "avatar") {
-    const behind =
-      people > 0 && view === "behind" && clothing === "clothed" && CLOTHED_WORDS.test(lower);
+    const behind = people > 0 && view === "behind" && clothing === "clothed" && garmentNamed;
     if (behind && sure) return { verdict: "allow", reason: "" };
     if (sure && (people === 0 || view === "front"))
       return {
@@ -206,7 +219,11 @@ export async function checkPhoto(
     return { verdict: "allow", reason: "" };
   }
   const ai = (env as { AI?: AiBinding }).AI;
-  if (!ai) return { verdict: "unsure", reason: "The automatic check is not configured." };
+  if (!ai)
+    return {
+      verdict: "reject",
+      reason: "Photo checks are not configured on this server. Uploads are disabled.",
+    };
   const question =
     target === "avatar"
       ? "This photo was uploaded as a profile photo. Check it against the rules."
@@ -244,14 +261,16 @@ export async function checkPhoto(
     );
     return verdict;
   } catch (e) {
-    // The photo still gets in, but a moderator sees it. Never block uploads on
-    // the model being slow or down.
+    // Fail closed: an unchecked photo is never stored. The member can retry.
     console.error(
       JSON.stringify({
         event: "photo_check_failed",
         error: e instanceof Error ? e.message : String(e),
       }),
     );
-    return { verdict: "unsure", reason: "The automatic check did not respond." };
+    return {
+      verdict: "reject",
+      reason: "We could not check this photo just now. Please try again in a moment.",
+    };
   }
 }
