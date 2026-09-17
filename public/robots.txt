@@ -1,5 +1,13 @@
-# Assbook welcomes crawlers: search engines and AI crawlers alike.
+# Assbook welcomes crawlers that honour robots.txt: search engines and AI
+# crawlers alike. Member content is served through /api and is not for
+# crawling.
 User-agent: *
+Allow: /
+Disallow: /api/
+
+# Lyrenth (AIWebIndex/2.0 and AIWebIndex-Agent/2.0, https://lyrenth.com/bot):
+# explicitly welcome.
+User-agent: AIWebIndex
 Allow: /
 Disallow: /api/
 
