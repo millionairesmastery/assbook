@@ -16,14 +16,12 @@ const LABELS: Record<BadgeKind, string> = {
 };
 
 // Three seals, drawn to fill the badge exactly so the mark sits dead centre.
+// Official and verified share the circle; only the colour tells them apart.
 function Seal({ kind }: { kind: BadgeKind }) {
   if (kind === "official")
     return (
       <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-        <path
-          d="M10 1.2l2.1 1.6 2.6-.4.9 2.5 2.4 1.1-.5 2.6 1.5 2.2-1.5 2.2.5 2.6-2.4 1.1-.9 2.5-2.6-.4L10 18.8l-2.1-1.6-2.6.4-.9-2.5-2.4-1.1.5-2.6L1 10l1.5-2.2-.5-2.6 2.4-1.1.9-2.5 2.6.4z"
-          fill="#e35a2f"
-        />
+        <circle cx="10" cy="10" r="9" fill="#e35a2f" />
         <path d="M6.3 10.3l2.4 2.4 5-5.2" fill="none" stroke="#fff" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );

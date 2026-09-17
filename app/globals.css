@@ -2425,10 +2425,6 @@ button.stat:hover {
   border: 0;
   padding: 0;
 }
-.peek-zone:focus-visible {
-  outline: 3px solid #fff;
-  outline-offset: -7px;
-}
 .peek-top,
 .peek-bottom {
   position: absolute;
