@@ -27,7 +27,9 @@
     }
   },
   "send_email": [{ "name": "EMAIL" }],
+  "ai": { "binding": "AI" },
   "vars": {
+    "PHOTO_CHECK": "on",
     "ADMIN_HANDLE": "",
     "APP_ORIGIN": "https://your-assbook.example",
     "EMAIL_FROM": "accounts@your-assbook.example"

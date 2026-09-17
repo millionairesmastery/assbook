@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ArrowRight, ImagePlus } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +53,11 @@ export function PhotoUploadDialog({
     setBusy(true);
     setError("");
     try {
-      const result = await uploadPhoto(picked.file);
+      const result = await uploadPhoto(picked.file, target);
+      if (result.flagged)
+        toast("Photo added. The automatic check was not sure, so a moderator will take a look.", {
+          duration: 8000,
+        });
       onUse(result.url);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -113,7 +118,7 @@ export function PhotoUploadDialog({
             className="primary"
             onClick={() => void upload()}
           >
-            {busy ? "Uploading…" : "Use this photo"}
+            {busy ? "Checking the dress code…" : "Use this photo"}
             <ArrowRight size={17} aria-hidden="true" />
           </button>
         </div>

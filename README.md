@@ -19,6 +19,10 @@ photo is your own fully clothed behind. No face recognition. Just hindsight.
 - Responsive desktop/mobile UI, accessible dialogs, keyboard navigation, a
   mobile compose button, and security headers on every page.
 - One-click email confirmation that keeps the confirming browser signed in.
+- Automatic photo check before storage. Every upload is checked automatically with Workers AI (Llama 3.2 Vision) before it is stored: clear nudity is rejected, a profile photo that is clearly not a clothed behind is rejected, and anything the model is unsure about is stored but listed under "Photos to review" in the moderation queue, where the moderator can approve or remove it. `PHOTO_CHECK` in `wrangler.jsonc` turns this on, off, or into the test mode the smoke test uses. The check is a first line, not a guarantee; reports and the queue remain the real safety net.
+  Self-hosters: Workers AI needs the `ai` binding in `wrangler.jsonc` and a
+  one-time acceptance of the Llama 3.2 Vision licence (send the prompt `agree`
+  to the model once from your account). Set `PHOTO_CHECK` to `off` to skip it.
 - Downloadable source, generated from the same checkout.
 - Local email simulation requires no service credentials. Live delivery uses
   Cloudflare Email Sending and requires sender-domain setup.

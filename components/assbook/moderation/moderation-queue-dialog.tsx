@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { EyeOff, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, EyeOff, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -12,7 +12,7 @@ import {
 import { ConfirmDialog } from "@/components/assbook/confirm-dialog";
 import { api, errorMessage, isAbortError } from "@/lib/api-client";
 import { age, plural } from "@/lib/format";
-import type { ReportGroup } from "@/lib/types";
+import type { FlaggedPhoto, ReportGroup } from "@/lib/types";
 
 export function ModerationQueueDialog({
   now,
@@ -24,6 +24,8 @@ export function ModerationQueueDialog({
   onClose: () => void;
 }) {
   const [reports, setReports] = useState<ReportGroup[]>([]);
+  const [photos, setPhotos] = useState<FlaggedPhoto[]>([]);
+  const [removingPhoto, setRemovingPhoto] = useState<FlaggedPhoto | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -35,9 +37,12 @@ export function ModerationQueueDialog({
 
   useEffect(() => {
     const controller = new AbortController();
-    api<{ reports: ReportGroup[] }>("admin", { signal: controller.signal })
+    api<{ reports: ReportGroup[]; photos: FlaggedPhoto[] }>("admin", {
+      signal: controller.signal,
+    })
       .then((data) => {
         setReports(data.reports);
+        setPhotos(data.photos ?? []);
         setError("");
         setLoaded(true);
       })
@@ -77,14 +82,40 @@ export function ModerationQueueDialog({
     [onResolved],
   );
 
+  const reviewPhoto = useCallback(
+    async (action: "approve" | "remove", photo: FlaggedPhoto) => {
+      setPending(photo.id);
+      try {
+        await api(
+          action === "approve"
+            ? "admin/photo/" + photo.id + "/approve"
+            : "admin/photo/" + photo.id,
+          { method: action === "approve" ? "POST" : "DELETE" },
+        );
+        setPhotos((current) => current.filter((item) => item.id !== photo.id));
+        if (action === "remove") onResolved();
+        toast.success(
+          action === "approve"
+            ? "Photo approved."
+            : "Photo removed everywhere it was used.",
+        );
+      } catch (cause) {
+        toast.error(errorMessage(cause));
+      } finally {
+        setPending("");
+      }
+    },
+    [onResolved],
+  );
+
   return (
     <>
       <Dialog open onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="assbook-dialog">
           <DialogHeader>
-            <DialogTitle>Community reports.</DialogTitle>
+            <DialogTitle>Moderation queue.</DialogTitle>
             <DialogDescription>
-              Review the reported posts below.
+              Reported posts, and photos the automatic check was not sure about.
             </DialogDescription>
           </DialogHeader>
           {error ? (
@@ -106,10 +137,57 @@ export function ModerationQueueDialog({
               <Loader2 className="spin" size={18} aria-hidden="true" /> Reading
               the queue…
             </p>
-          ) : reports.length === 0 ? (
-            <p className="muted">No reports to review.</p>
+          ) : reports.length === 0 && photos.length === 0 ? (
+            <p className="muted">Nothing to review. Enjoy the view.</p>
           ) : (
-            reports.map((report) => (
+            <>
+            {photos.length > 0 && (
+              <section className="form-stack">
+                <h3>Photos to review</h3>
+                {photos.map((photo) => (
+                  <div className="report-item" key={photo.id}>
+                    <b>@{photo.handle}</b>
+                    <p className="small muted">
+                      {photo.target === "avatar" ? "Profile photo" : "Post photo"}
+                      {photo.in_use ? ", in use" : ", not used yet"} · uploaded{" "}
+                      {age(photo.created, now)}
+                    </p>
+                    <img
+                      className="report-photo"
+                      src={photo.url}
+                      alt={"Photo to review from @" + photo.handle}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    {photo.reason && (
+                      <p className="small report-reasons">
+                        <span>{photo.reason}</span>
+                      </p>
+                    )}
+                    <div className="report-actions">
+                      <button
+                        className="text-link"
+                        disabled={pending === photo.id}
+                        onClick={() => void reviewPhoto("approve", photo)}
+                      >
+                        <Check size={15} aria-hidden="true" />
+                        Approve
+                      </button>
+                      <button
+                        className="text-link"
+                        disabled={pending === photo.id}
+                        onClick={() => setRemovingPhoto(photo)}
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                        Remove photo
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            )}
+            {reports.length > 0 && photos.length > 0 && <h3>Reported posts</h3>}
+            {reports.map((report) => (
               <div className="report-item" key={report.post_id}>
                 <b>@{report.handle}</b>
                 <p className="small muted">
@@ -153,10 +231,23 @@ export function ModerationQueueDialog({
                   </button>
                 </div>
               </div>
-            ))
+            ))}
+            </>
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={removingPhoto !== null}
+        onOpenChange={(open) => !open && setRemovingPhoto(null)}
+        title="Remove this photo?"
+        description="It is deleted from storage, taken off the profile, and any post using it is hidden. There is no undo."
+        confirmLabel="Remove it"
+        onConfirm={() => {
+          const target = removingPhoto;
+          setRemovingPhoto(null);
+          if (target) void reviewPhoto("remove", target);
+        }}
+      />
       <ConfirmDialog
         open={confirming?.action === "hide"}
         onOpenChange={(open) => !open && setConfirming(null)}

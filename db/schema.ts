@@ -124,13 +124,22 @@ export const blocks = sqliteTable(
     index("blocks_target").on(t.targetId),
   ],
 );
-export const uploads = sqliteTable("uploads", {
-  id: text().primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  created: integer().notNull(),
-});
+export const uploads = sqliteTable(
+  "uploads",
+  {
+    id: text().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    created: integer().notNull(),
+    // What the photo was uploaded for: "post" or "avatar".
+    target: text().notNull().default("post"),
+    // 1 when the automatic check was unsure and a moderator should look.
+    flagged: integer().notNull().default(0),
+    flagReason: text("flag_reason"),
+  },
+  (t) => [index("uploads_flagged").on(t.flagged, t.created)],
+);
 export const reports = sqliteTable(
   "reports",
   {

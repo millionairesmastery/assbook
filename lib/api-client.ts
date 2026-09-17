@@ -81,13 +81,15 @@ export function api<T>(
 
 export function uploadPhoto(
   file: File,
+  target: "post" | "avatar",
   signal?: AbortSignal,
-): Promise<{ url: string }> {
-  return send<{ url: string }>("/api/upload", {
+): Promise<{ url: string; flagged: boolean }> {
+  return send<{ url: string; flagged: boolean }>("/api/upload", {
     method: "POST",
     headers: {
       "Content-Type": file.type || "application/octet-stream",
       "X-Photo-Rules": "accepted",
+      "X-Photo-Target": target,
     },
     body: file,
     signal,

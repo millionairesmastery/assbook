@@ -50,3 +50,12 @@ export type ReportGroup = {
   latest: number;
   reasons: string;
 };
+export type FlaggedPhoto = {
+  id: string;
+  url: string;
+  created: number;
+  target: string;
+  reason: string | null;
+  handle: string;
+  in_use: number;
+};

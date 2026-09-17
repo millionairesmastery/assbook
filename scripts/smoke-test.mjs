@@ -229,6 +229,37 @@ try {
     assert.equal((await req(anon, "feed?post=" + p2.id)).posts.length, 0);
     await req(admin, "comments/" + own.id, "DELETE");
     pass("Moderator queue groups reports, dismisses, hides posts, and removes replies");
+    // Photo check (PHOTO_CHECK=test): rejected photos never land, unsure ones
+    // are queued, and the moderator can approve or remove them.
+    const testPng = png;
+    await req(a, "upload", "POST", testPng, 400, {
+      "X-Photo-Rules": "accepted",
+      "Content-Type": "image/png",
+      "X-Photo-Check-Test": "reject",
+    });
+    const flagged = await req(a, "upload", "POST", testPng, 201, {
+      "X-Photo-Rules": "accepted",
+      "Content-Type": "image/png",
+      "X-Photo-Target": "avatar",
+      "X-Photo-Check-Test": "flag",
+    });
+    assert.equal(flagged.flagged, true);
+    const flaggedId = flagged.url.split("/").at(-1);
+    await req(a, "profile", "PUT", { avatar: flagged.url });
+    assert.equal((await fetch(base + flagged.url, { headers: { Cookie: admin.cookie } })).status, 200, "Moderator can view queued photos");
+    const photoQueue = (await req(admin, "admin")).photos;
+    const photoItem = photoQueue.find((x) => x.id === flaggedId);
+    assert.ok(photoItem, "Unsure photo is in the queue");
+    assert.equal(photoItem.target, "avatar");
+    assert.equal(photoItem.in_use, 1);
+    await req(admin, "admin/photo/" + flaggedId + "/approve", "POST", {});
+    assert.ok(!(await req(admin, "admin")).photos.some((x) => x.id === flaggedId));
+    await req(admin, "admin/photo/" + flaggedId + "/approve", "POST", {}, 404);
+    await req(admin, "admin/photo/" + flaggedId, "DELETE");
+    assert.equal((await req(a, "me")).user.avatar, null, "Removed photo is taken off the avatar");
+    assert.equal((await fetch(base + flagged.url, { headers: { Cookie: a.cookie } })).status, 404);
+    await req(a, "profile", "PUT", { avatar: photo.url });
+    pass("Photo check rejects, queues unsure photos, and the moderator can approve or remove them");
   } else console.log("SKIP moderator queue (set ASSBOOK_ADMIN_HANDLE and ADMIN_HANDLE in .dev.vars)");
   await req(a, "posts/" + p.id, "DELETE");
   assert.equal((await req(anon, "feed?post=" + p.id)).posts.length, 0);

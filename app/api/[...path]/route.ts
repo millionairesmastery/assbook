@@ -1,4 +1,5 @@
 import { authRoute } from "@/lib/auth";
+import { checkPhoto, type PhotoTarget } from "@/lib/moderation";
 import {
   db,
   bucket,
@@ -180,7 +181,7 @@ async function handle(req: Request) {
         .bind(link, link, id)
         .first<{ user_id: string; published: number }>();
       if (!photo) throw new HttpError(404, "Photo not found.");
-      if (photo.user_id !== uid) {
+      if (photo.user_id !== uid && !me?.isAdmin) {
         if (!photo.published) throw new HttpError(404, "Photo not found.");
         // Blocking hides photos too, in both directions.
         if (
@@ -235,18 +236,32 @@ async function handle(req: Request) {
         type = "image/webp";
       if (!type || bytes.length < 32)
         throw new HttpError(400, "Use a JPEG, PNG, or WebP photo under 2 MB.");
+      const target: PhotoTarget =
+        req.headers.get("x-photo-target") === "avatar" ? "avatar" : "post";
+      // Dress-code check before anything is stored. Rejections never reach
+      // storage; unsure photos are stored and queued for a moderator.
+      const check = await checkPhoto(
+        bytes,
+        type,
+        target,
+        req.headers.get("x-photo-check-test"),
+      );
+      if (check.verdict === "reject") throw new HttpError(400, check.reason);
+      const flagged = check.verdict === "unsure";
       const id = crypto.randomUUID();
       await bucket().put(id, bytes, { httpMetadata: { contentType: type } });
       try {
         await db()
-          .prepare("INSERT INTO uploads(id,user_id,created) VALUES(?,?,?)")
-          .bind(id, user.id, Date.now())
+          .prepare(
+            "INSERT INTO uploads(id,user_id,created,target,flagged,flag_reason) VALUES(?,?,?,?,?,?)",
+          )
+          .bind(id, user.id, Date.now(), target, flagged ? 1 : 0, flagged ? check.reason : null)
           .run();
       } catch (e) {
         await bucket().delete(id);
         throw e;
       }
-      return json({ url: "/api/photo/" + id }, 201);
+      return json({ url: "/api/photo/" + id, flagged }, 201);
     }
     if (path[0] === "profile" && method === "PUT") {
       const d = await body(req);
@@ -414,16 +429,50 @@ async function handle(req: Request) {
     }
     if (path[0] === "admin") {
       if (!user.isAdmin) throw new HttpError(403, "Moderator access required.");
-      if (method === "GET")
-        return json({
-          reports: (
-            await db()
-              .prepare(
-                "SELECT p.id post_id,p.body,p.image,u.handle,count(*) count,max(r.created) latest,group_concat(r.reason,char(10)) reasons FROM reports r JOIN posts p ON p.id=r.post_id JOIN users u ON u.id=p.user_id WHERE p.deleted=0 AND r.resolved=0 GROUP BY p.id ORDER BY latest DESC LIMIT 100",
-              )
-              .all()
-          ).results,
-        });
+      if (method === "GET") {
+        const [reports, photos] = await db().batch([
+          db().prepare(
+            "SELECT p.id post_id,p.body,p.image,u.handle,count(*) count,max(r.created) latest,group_concat(r.reason,char(10)) reasons FROM reports r JOIN posts p ON p.id=r.post_id JOIN users u ON u.id=p.user_id WHERE p.deleted=0 AND r.resolved=0 GROUP BY p.id ORDER BY latest DESC LIMIT 100",
+          ),
+          db().prepare(
+            "SELECT up.id,'/api/photo/'||up.id url,up.created,up.target,up.flag_reason reason,u.handle,(EXISTS(SELECT 1 FROM users WHERE avatar='/api/photo/'||up.id) OR EXISTS(SELECT 1 FROM posts WHERE image='/api/photo/'||up.id AND deleted=0)) in_use FROM uploads up JOIN users u ON u.id=up.user_id WHERE up.flagged=1 ORDER BY up.created DESC LIMIT 100",
+          ),
+        ]);
+        return json({ reports: reports.results, photos: photos.results });
+      }
+      if (path[1] === "photo") {
+        const id = uuid(path[2]);
+        const link = "/api/photo/" + id;
+        if (method === "POST" && path[3] === "approve") {
+          const result = await db()
+            .prepare("UPDATE uploads SET flagged=0,flag_reason=NULL WHERE id=? AND flagged=1")
+            .bind(id)
+            .run();
+          if (!result.meta.changes) throw new HttpError(404, "Photo not found.");
+          moderation("approve_photo", user.id, id);
+          return json({ ok: true });
+        }
+        if (method === "DELETE") {
+          const owner = await db()
+            .prepare("SELECT user_id FROM uploads WHERE id=?")
+            .bind(id)
+            .first<{ user_id: string }>();
+          if (!owner) throw new HttpError(404, "Photo not found.");
+          // Take the photo out of everything it is used in, then out of storage.
+          await db().batch([
+            db().prepare("UPDATE users SET avatar=NULL WHERE avatar=?").bind(link),
+            db().prepare("UPDATE posts SET deleted=1 WHERE image=? AND deleted=0").bind(link),
+            db().prepare(
+              "UPDATE reports SET resolved=1 WHERE post_id IN (SELECT id FROM posts WHERE image=?)",
+            ).bind(link),
+            db().prepare("DELETE FROM uploads WHERE id=?").bind(id),
+          ]);
+          await bucket().delete(id);
+          moderation("remove_photo", user.id, id);
+          return json({ ok: true });
+        }
+        throw new HttpError(404, "Not found.");
+      }
       const post = uuid(path[1]);
       if (method === "DELETE") {
         const removed = await db()

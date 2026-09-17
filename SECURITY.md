@@ -68,9 +68,14 @@ the generic response. Logs include a failure event without recipient or token.
 - Public reads are limited per IP (search more tightly). Route ids are
   validated before any query.
 - MFA, passkeys, account deletion, and detailed session history are not implemented.
-- Photo ownership/clothing checks are uploader attestations plus manual reporting;
-  uploads are not automatically moderated or stripped of metadata (EXIF,
-  including location, is served as uploaded).
+- Photo ownership is an uploader attestation. Every upload is checked by a
+  vision model on Workers AI before storage (nudity and, for profile photos,
+  "is this a clothed behind"); unsure results are stored and queued for the
+  moderator rather than rejected. The model can be wrong in both directions,
+  so reporting and the queue remain essential. Photos are not stripped of
+  metadata (EXIF, including location, is served as uploaded).
+- The moderator can view any stored photo, including unpublished ones, to
+  review the queue. Moderator actions on photos are logged.
 - No independent security audit or large-scale load test has been performed.
 
 The local authentication integration test covers session invalidation, concurrent
