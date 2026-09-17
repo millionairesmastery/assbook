@@ -47,11 +47,17 @@ export type Comment = {
   id: string;
   post_id: string;
   user_id: string;
+  /** The reply this one sits under, or null at the top level. */
+  parent_id: string | null;
   body: string;
   created: number;
+  likes: number;
+  liked: number;
   handle: string;
   name: string;
   avatar: string | null;
+  verified?: "user" | "business" | null;
+  official?: number;
 };
 export type ReportGroup = {
   post_id: string;
@@ -119,6 +125,9 @@ export type NotificationKind =
   | "peek_like"
   | "peek_reply"
   | "repeek"
+  | "mention"
+  | "comment_like"
+  | "comment_reply"
   | "note";
 export type NotificationActor = {
   id: string;

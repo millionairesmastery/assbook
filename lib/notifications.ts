@@ -11,6 +11,9 @@ export type NotificationKind =
   | "peek_like"
   | "peek_reply"
   | "repeek"
+  | "mention"
+  | "comment_like"
+  | "comment_reply"
   | "note";
 
 type NotifyInput = {
@@ -58,6 +61,59 @@ export async function notify(input: NotifyInput): Promise<void> {
         kind: input.kind,
         error: e instanceof Error ? e.message : String(e),
       }),
+    );
+  }
+}
+
+// @handles in a text: a word of 3 to 24 handle characters after an @ that
+// does not sit inside another word or address. Ten at most per text.
+const MENTION = /(?:^|[^a-z0-9_@])@([a-z0-9_]{3,24})(?![a-z0-9_])/gi;
+export function mentionedHandles(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.matchAll(MENTION)) {
+    found.add(match[1].toLowerCase());
+    if (found.size >= 10) break;
+  }
+  return [...found];
+}
+
+// Tells everyone named in a text, unless they are the author, already told
+// another way (the post owner, the reply's author), or blocked either way.
+export async function notifyMentions(input: {
+  text: string;
+  actor: string;
+  postId?: string;
+  peekId?: string;
+  ref?: string;
+  skip?: (string | null | undefined)[];
+}): Promise<void> {
+  const handles = mentionedHandles(input.text);
+  if (!handles.length) return;
+  const skip = new Set([input.actor, ...(input.skip ?? []).filter(Boolean)]);
+  try {
+    const rows = await db()
+      .prepare(
+        "SELECT u.id FROM users u WHERE u.handle IN (" +
+          handles.map(() => "?").join(",") +
+          ") AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?))",
+      )
+      .bind(...handles, input.actor, input.actor)
+      .all<{ id: string }>();
+    for (const row of rows.results) {
+      if (skip.has(row.id)) continue;
+      await notify({
+        to: row.id,
+        actor: input.actor,
+        kind: "mention",
+        postId: input.postId,
+        peekId: input.peekId,
+        ref: input.ref,
+        body: input.text,
+      });
+    }
+  } catch (e) {
+    console.error(
+      JSON.stringify({ event: "mention_failed", error: e instanceof Error ? e.message : String(e) }),
     );
   }
 }

@@ -37,6 +37,10 @@ it works before you read a line of it.
 - Local email simulation requires no service credentials. Live delivery uses
   Cloudflare Email Sending and requires sender-domain setup.
 
+Replies thread one level deep with "View replies", carry a heart with a count,
+and "Reply" answers a person by handle. @handles anywhere in a post or reply
+link to the profile, offer people while you type, and tell the person named.
+
 Notifications live behind the bell in the top bar: a follow, a like or a reply
 on a post or a peek, a re-peek, and notes from the crew when a photo has been
 reviewed. They are written when the event happens and kept for two months.

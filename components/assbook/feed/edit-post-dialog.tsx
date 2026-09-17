@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CharCounter, useCharCounter } from "@/components/assbook/char-counter";
+import { MentionField } from "@/components/assbook/mention-field";
 import { api, errorMessage } from "@/lib/api-client";
 import type { Post } from "@/lib/types";
 
@@ -70,9 +71,10 @@ export function EditPostDialog({
               Your post
               <CharCounter value={body} max={500} show={counter.focused} />
             </span>
-            <textarea
+            <MentionField
+              multiline
               value={body}
-              onChange={(event) => setBody(event.target.value)}
+              onChange={setBody}
               maxLength={500}
               rows={5}
               autoFocus

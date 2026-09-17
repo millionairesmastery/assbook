@@ -1,4 +1,4 @@
-import { notify } from "./notifications";
+import { notify, notifyMentions } from "./notifications";
 import {
   db,
   bucket,
@@ -366,6 +366,7 @@ export async function peeksRoute(
       .bind(replyId, id, user.id, words, Date.now())
       .run();
     await notify({ to: row.user_id, actor: user.id, kind: "peek_reply", peekId: id, ref: replyId, body: words });
+    await notifyMentions({ text: words, actor: user.id, peekId: id, ref: replyId, skip: [row.user_id] });
     return json({ ok: true }, 201);
   }
 

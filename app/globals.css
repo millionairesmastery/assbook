@@ -87,11 +87,17 @@ button:disabled {
   opacity: 0.5;
 }
 button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
+a:focus-visible {
   outline: 3px solid #c94120;
   outline-offset: 3px;
+}
+/* Typing gets a quiet ring, not an orange frame. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: #b8c2cc;
+  box-shadow: 0 0 0 3px rgba(28, 35, 40, 0.08);
 }
 button svg {
   flex-shrink: 0;
@@ -984,7 +990,7 @@ h2 {
 .comment {
   display: flex;
   gap: 10px;
-  margin: 18px 0;
+  margin: 16px 0;
 }
 .comment b {
   font-size: 13px;
@@ -993,6 +999,176 @@ h2 {
   font-size: 15px;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  margin: 2px 0 0;
+}
+.comment-avatar {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  flex: none;
+  border-radius: 12px;
+}
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
+.comment-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.comment-name:hover {
+  text-decoration: underline;
+}
+/* Heart, Reply and the bin, small and quiet under each reply. */
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 6px;
+}
+.comment-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: #63717c;
+  cursor: pointer;
+}
+.comment-actions button:hover {
+  color: #1c2328;
+}
+.comment-actions button.selected {
+  color: #c94120;
+}
+.comment-replies {
+  margin-left: 53px;
+  border-left: 2px solid #eef1f4;
+  padding-left: 10px;
+}
+.comment-replies .comment {
+  margin: 12px 0;
+}
+.comment-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px 53px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: #63717c;
+  cursor: pointer;
+}
+.replying-to {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0 -12px;
+  font-size: 12px;
+  color: #63717c;
+}
+.replying-to button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #eef1f4;
+  color: #63717c;
+  cursor: pointer;
+}
+/* @handles inside text. */
+.mention {
+  color: #c94120;
+  font-weight: 600;
+}
+.mention:hover {
+  text-decoration: underline;
+}
+/* The people list that opens while typing an @handle. */
+.mention-wrap {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+.mention-wrap > input,
+.mention-wrap > textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.mention-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e3e7ec;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.mention-menu.below {
+  top: calc(100% + 4px);
+}
+.mention-menu.above {
+  bottom: calc(100% + 4px);
+}
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.mention-item.active,
+.mention-item:hover {
+  background: #f7f8fa;
+}
+.mention-item .avatar {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.mention-item .avatar img {
+  width: 30px;
+  height: 30px;
+}
+.mention-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mention-who b {
+  font-size: 13px;
+}
+.mention-who span {
+  font-size: 12px;
+  color: #63717c;
 }
 .reply-original {
   font-size: 14px;
@@ -1665,8 +1841,9 @@ button.stat:hover {
   color: #1c2328;
 }
 .assbook-dialog .form-stack .onboard-search input:focus {
-  outline: 2px solid #c94120;
-  outline-offset: 1px;
+  outline: none;
+  border-color: #b8c2cc;
+  box-shadow: 0 0 0 3px rgba(28, 35, 40, 0.08);
   background: #fff;
 }
 .onboard-list {

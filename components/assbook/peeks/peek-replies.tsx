@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/sheet";
 import { Avatar } from "@/components/assbook/avatar";
 import { CharCounter, useCharCounter } from "@/components/assbook/char-counter";
+import { MentionField } from "@/components/assbook/mention-field";
+import { MentionText } from "@/components/assbook/mention-text";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { api, errorMessage, isAbortError } from "@/lib/api-client";
 import { age } from "@/lib/format";
@@ -151,7 +153,9 @@ export function PeekReplies({
                 <span className="person-meta">
                   @{item.handle} · {age(item.created, now)}
                 </span>
-                <p>{item.body}</p>
+                <p>
+                <MentionText text={item.body} />
+              </p>
               </div>
               {canRemove(item) && (
                 <button
@@ -176,9 +180,10 @@ export function PeekReplies({
       >
         <label className="reply-field">
           <span className="sr-only">Your reply</span>
-          <input
+          <MentionField
             value={reply}
-            onChange={(event) => setReply(event.target.value)}
+            onChange={setReply}
+            menu="above"
             maxLength={280}
             placeholder="Say something nice about those ten seconds."
             required

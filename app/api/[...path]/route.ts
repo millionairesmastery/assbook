@@ -1,6 +1,6 @@
 import { authRoute, handleAvailability } from "@/lib/auth";
 import { peeksRoute, removePeeksWithFrame } from "@/lib/peeks";
-import { notificationsRoute, notify } from "@/lib/notifications";
+import { notificationsRoute, notify, notifyMentions } from "@/lib/notifications";
 import { checkPhoto, type PhotoTarget } from "@/lib/moderation";
 import {
   db,
@@ -47,6 +47,7 @@ const writePaths = [
   "profile",
   "posts",
   "like",
+  "comment-like",
   "save",
   "follow",
   "block",
@@ -272,11 +273,11 @@ async function handle(req: Request) {
         comments: (
           await db()
             .prepare(
-              "SELECT c.id,c.post_id,c.user_id,c.body,c.created,u.handle,u.name,u.avatar FROM comments c JOIN users u ON u.id=c.user_id WHERE c.post_id=? AND " +
+              "SELECT c.id,c.post_id,c.user_id,c.parent_id,c.body,c.created,u.handle,u.name,u.avatar,u.verified,(u.handle=?) official,(SELECT count(*) FROM comment_likes l WHERE l.comment_id=c.id) likes,EXISTS(SELECT 1 FROM comment_likes l WHERE l.comment_id=c.id AND l.user_id=?) liked FROM comments c JOIN users u ON u.id=c.user_id WHERE c.post_id=? AND " +
                 blockClause +
-                " ORDER BY c.created ASC LIMIT 100",
+                " ORDER BY c.created ASC LIMIT 200",
             )
-            .bind(path[1], uid, uid)
+            .bind(adminHandle(), uid, path[1], uid, uid)
             .all()
         ).results,
       });
@@ -468,6 +469,7 @@ async function handle(req: Request) {
         )
         .bind(id, user.id, text, image, Date.now())
         .run();
+      await notifyMentions({ text, actor: user.id, postId: id });
       return json({ id }, 201);
     }
     if (path[0] === "posts" && method === "PUT") {
@@ -487,6 +489,8 @@ async function handle(req: Request) {
         .prepare("UPDATE posts SET body=?,edited_at=? WHERE id=? AND user_id=?")
         .bind(text, Date.now(), path[1], user.id)
         .run();
+      // Only people not already told: the unique key drops repeats.
+      await notifyMentions({ text, actor: user.id, postId: path[1] });
       return json({ ok: true, edited_at: Date.now() });
     }
     if (path[0] === "posts" && method === "DELETE") {
@@ -580,21 +584,50 @@ async function handle(req: Request) {
       const d = await body(req);
       const commentId = crypto.randomUUID();
       const words = str(d.body, 280, 1);
+      // A reply to a reply. Threads stay one level deep: answering inside a
+      // thread attaches to the thread's first reply, but the person answered
+      // is the one who gets told.
+      const parentId = typeof d.parent === "string" && d.parent ? uuid(d.parent) : "";
+      const parent = parentId
+        ? await db()
+            .prepare("SELECT id,user_id,parent_id FROM comments WHERE id=? AND post_id=?")
+            .bind(parentId, target.id)
+            .first<{ id: string; user_id: string; parent_id: string | null }>()
+        : null;
+      if (parentId && !parent) throw new HttpError(404, "That reply is gone.");
+      const threadId = parent ? (parent.parent_id ?? parent.id) : null;
       await db()
         .prepare(
-          "INSERT INTO comments(id,post_id,user_id,body,created) VALUES(?,?,?,?,?)",
+          "INSERT INTO comments(id,post_id,user_id,body,created,parent_id) VALUES(?,?,?,?,?,?)",
         )
-        .bind(commentId, path[1], user.id, words, Date.now())
+        .bind(commentId, target.id, user.id, words, Date.now(), threadId)
         .run();
-      await notify({
-        to: target.user_id,
+      if (parent)
+        await notify({
+          to: parent.user_id,
+          actor: user.id,
+          kind: "comment_reply",
+          postId: target.id,
+          ref: commentId,
+          body: words,
+        });
+      if (!parent || parent.user_id !== target.user_id)
+        await notify({
+          to: target.user_id,
+          actor: user.id,
+          kind: "comment",
+          postId: target.id,
+          ref: commentId,
+          body: words,
+        });
+      await notifyMentions({
+        text: words,
         actor: user.id,
-        kind: "comment",
         postId: target.id,
         ref: commentId,
-        body: words,
+        skip: [target.user_id, parent?.user_id],
       });
-      return json({ ok: true }, 201);
+      return json({ ok: true, id: commentId }, 201);
     }
     if (path[0] === "comments" && method === "DELETE") {
       // The author, the owner of the post, or the moderator.
@@ -606,7 +639,39 @@ async function handle(req: Request) {
         .run();
       if (!result.meta.changes)
         throw new HttpError(404, "This reply is unavailable.");
+      await db().prepare("DELETE FROM comments WHERE parent_id=?").bind(path[1]).run();
       return json({ ok: true });
+    }
+    // A heart on a reply, the TikTok way. Toggled like a post like.
+    if (path[0] === "comment-like" && ["PUT", "DELETE"].includes(method)) {
+      const id = uuid(path[1]);
+      const target = await db()
+        .prepare("SELECT id,user_id,post_id FROM comments WHERE id=?")
+        .bind(id)
+        .first<{ id: string; user_id: string; post_id: string }>();
+      if (!target) throw new HttpError(404, "This reply is unavailable.");
+      await visiblePost(target.post_id, user.id);
+      const written = await db()
+        .prepare(
+          method === "PUT"
+            ? "INSERT OR IGNORE INTO comment_likes(user_id,comment_id) VALUES(?,?)"
+            : "DELETE FROM comment_likes WHERE user_id=? AND comment_id=?",
+        )
+        .bind(user.id, id)
+        .run();
+      if (method === "PUT" && written.meta.changes)
+        await notify({
+          to: target.user_id,
+          actor: user.id,
+          kind: "comment_like",
+          postId: target.post_id,
+          ref: id,
+        });
+      const count = await db()
+        .prepare("SELECT count(*) n FROM comment_likes WHERE comment_id=?")
+        .bind(id)
+        .first<{ n: number }>();
+      return json({ likes: count?.n ?? 0 });
     }
     if (path[0] === "report" && method === "POST") {
       await rate("report:" + user.id, 10, 3600000);

@@ -31,6 +31,12 @@ function said(item: Notification): string {
       return "replied to your peek:";
     case "repeek":
       return "re-peeked your peek.";
+    case "mention":
+      return "mentioned you:";
+    case "comment_like":
+      return "liked your reply.";
+    case "comment_reply":
+      return "replied to you:";
     default:
       return "";
   }

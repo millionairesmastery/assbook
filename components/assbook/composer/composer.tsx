@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { ArrowRight, ImagePlus, Loader2, Video, X } from "lucide-react";
 import { Avatar } from "@/components/assbook/avatar";
+import { MentionField } from "@/components/assbook/mention-field";
 import type { Profile } from "@/lib/types";
 
 export function Composer({
@@ -39,10 +40,11 @@ export function Composer({
     <section className="composer card" id="composer" ref={section}>
       <div className="compose-top">
         <Avatar person={user ?? undefined} />
-        <textarea
-          ref={textareaRef}
+        <MentionField
+          multiline
+          fieldRef={textareaRef}
           value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
+          onChange={onDraftChange}
           maxLength={500}
           aria-label="Write a post"
           placeholder="What’s happening behind the scenes?"

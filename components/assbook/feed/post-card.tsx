@@ -2,6 +2,7 @@
 import { memo } from "react";
 import { Bookmark, Heart, MessageCircle, Pin, Send } from "lucide-react";
 import { Avatar } from "@/components/assbook/avatar";
+import { MentionText } from "@/components/assbook/mention-text";
 import { NameBadge } from "@/components/assbook/account-badge";
 import { PostMenu } from "@/components/assbook/feed/post-menu";
 import { age } from "@/lib/format";
@@ -107,7 +108,9 @@ export const PostCard = memo(function PostCard({
           onPin={onPin}
         />
       </div>
-      <p className="post-text">{post.body}</p>
+      <p className="post-text">
+        <MentionText text={post.body} onVisit={onVisitProfile} />
+      </p>
       {post.image && (
         <button
           className="post-photo-button"

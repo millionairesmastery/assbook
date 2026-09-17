@@ -79,8 +79,23 @@ export const comments = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     body: text().notNull(),
     created: integer().notNull(),
+    // A reply to a reply. One level deep: replies to a nested reply attach to
+    // the same parent, the way Instagram threads do.
+    parentId: text("parent_id"),
   },
-  (t) => [index("comments_post").on(t.postId, t.created)],
+  (t) => [index("comments_post").on(t.postId, t.created), index("comments_parent").on(t.parentId)],
+);
+export const commentLikes = sqliteTable(
+  "comment_likes",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    commentId: text("comment_id")
+      .notNull()
+      .references(() => comments.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.commentId] }), index("comment_likes_comment").on(t.commentId)],
 );
 export const likes = sqliteTable(
   "likes",

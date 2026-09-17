@@ -839,6 +839,10 @@ export default function Assbook({
           now={now}
           onCountChange={(id, count) => patchPost(id, { comments: count })}
           onRequireUser={requireUser}
+          onVisitProfile={(handle) => {
+            closeModal();
+            visitProfile(handle);
+          }}
           onClose={closeModal}
         />
       )}
