@@ -13,7 +13,9 @@ const MODELS = {
   moondream: "@cf/moondream/moondream3.1-9B-A2B",
   llama: "@cf/meta/llama-3.2-11b-vision-instruct",
 } as const;
-const TIMEOUT_MS = 12000;
+// Workers AI can take a while under load. Rather than refusing a fine photo
+// as "could not check", the request waits, and the member sees a spinner.
+const TIMEOUT_MS = 40000;
 
 // The description comes first on purpose: it makes the model look at the
 // image before it fills in the flags, instead of echoing the template.

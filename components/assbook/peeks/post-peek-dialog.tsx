@@ -29,8 +29,9 @@ import {
 const CLIP_MS = 5000;
 const MAX_SECONDS = 5.5;
 const MAX_BYTES = 8 * 1024 * 1024;
-// The frame goes through the photo check, which stops at 2 MB.
-const FRAME_EDGE = 1080;
+// The frame goes through the photo check. Smaller is faster there, and the
+// model reads a 960 pixel still as well as a bigger one.
+const FRAME_EDGE = 960;
 
 type Clip = { blob: Blob; url: string; type: string };
 
@@ -98,7 +99,7 @@ async function drawFrame(video: HTMLVideoElement): Promise<Blob | null> {
   if (!context) return null;
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
   return new Promise((resolve) =>
-    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.85),
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.8),
   );
 }
 

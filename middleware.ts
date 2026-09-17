@@ -18,6 +18,8 @@ export function middleware() {
       scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
+      // Peek previews play a clip that only exists in the browser yet.
+      "media-src 'self' blob:",
       "connect-src 'self' https://cloudflareinsights.com",
       "worker-src 'self' blob:",
       "font-src 'self'",

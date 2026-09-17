@@ -172,6 +172,9 @@ export function AuthDialog({
               maxLength={24}
               pattern="[a-zA-Z0-9_]{3,24}"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder="jeanclaude"
               value={handle}
               onChange={(event) => setHandle(event.target.value)}
