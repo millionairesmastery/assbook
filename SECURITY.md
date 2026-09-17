@@ -76,6 +76,12 @@ the generic response. Logs include a failure event without recipient or token.
   metadata (EXIF, including location, is served as uploaded).
 - The moderator can view any stored photo, including unpublished ones, to
   review the queue. Moderator actions on photos are logged.
+- Peek clips are stored as uploaded (MP4 or WebM, up to 8 MB) and are not
+  scanned frame by frame; the one frame the browser submits is checked like
+  a post photo and is what the moderator sees. Clips are served only to
+  signed-in members, respect blocks, and are deleted after 24 hours.
+  Reporting a peek flags its frame for review; removing that frame removes
+  the peek and every re-peek of it.
 - No independent security audit or large-scale load test has been performed.
 
 The local authentication integration test covers session invalidation, concurrent

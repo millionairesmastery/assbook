@@ -1,4 +1,5 @@
 import { authRoute, handleAvailability } from "@/lib/auth";
+import { peeksRoute, removePeeksWithFrame } from "@/lib/peeks";
 import { checkPhoto, type PhotoTarget } from "@/lib/moderation";
 import {
   db,
@@ -34,10 +35,10 @@ const blockClause =
 // One post row as the client sees it. Binds, in order: the official handle,
 // two viewer ids for the reply count, one for liked, one for saved.
 const postSelect =
-  "SELECT p.id,p.user_id,p.body,p.image,p.created,p.pinned,p.edited_at,u.handle,u.name,u.avatar,u.demo,(u.handle=?) official,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE ";
+  "SELECT p.id,p.user_id,p.body,p.image,p.created,p.pinned,p.edited_at,u.handle,u.name,u.avatar,u.demo,u.verified,(u.handle=?) official,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE ";
 // One person row. Binds: the official handle, then the viewer id.
 const personSelect =
-  "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,(u.handle=?) official,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u ";
+  "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,u.verified,(u.handle=?) official,(EXISTS(SELECT 1 FROM peeks k WHERE k.user_id=u.id AND k.deleted=0 AND k.expires>(strftime('%s','now')*1000)) OR EXISTS(SELECT 1 FROM peek_shares s JOIN peeks k2 ON k2.id=s.peek_id WHERE s.user_id=u.id AND k2.deleted=0 AND k2.expires>(strftime('%s','now')*1000))) has_peek,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u ";
 const writePaths = [
   "suggestions",
   "onboarding",
@@ -68,6 +69,11 @@ async function handle(req: Request) {
     if (path[0] === "me" && method === "GET") return json({ user: me });
     const authResponse = await authRoute(req, url.pathname.slice(5));
     if (authResponse) return authResponse;
+    if (path[0] === "peeks" || path[0] === "peek-upload") {
+      if (path[0] === "peeks" && !path[1] && method === "GET")
+        url.searchParams.set("official", adminHandle());
+      return await peeksRoute(req, path, method, me, url);
+    }
     if (path[0] === "logout" && method === "POST") {
       await db()
         .prepare("DELETE FROM sessions WHERE token=?")
@@ -246,7 +252,7 @@ async function handle(req: Request) {
         throw new HttpError(404, "This profile is unavailable.");
       const u = await db()
         .prepare(
-          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,(u.handle=?) official,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,(SELECT count(*) FROM follows f WHERE f.user_id=u.id) following_count,(SELECT count(*) FROM posts p WHERE p.user_id=u.id AND p.deleted=0) posts_count,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND " +
+          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,u.verified,(u.handle=?) official,(EXISTS(SELECT 1 FROM peeks k WHERE k.user_id=u.id AND k.deleted=0 AND k.expires>(strftime('%s','now')*1000)) OR EXISTS(SELECT 1 FROM peek_shares s JOIN peeks k2 ON k2.id=s.peek_id WHERE s.user_id=u.id AND k2.deleted=0 AND k2.expires>(strftime('%s','now')*1000))) has_peek,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,(SELECT count(*) FROM follows f WHERE f.user_id=u.id) following_count,(SELECT count(*) FROM posts p WHERE p.user_id=u.id AND p.deleted=0) posts_count,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND " +
             blockClause,
         )
         .bind(adminHandle(), uid, path[1], uid, uid)
@@ -627,6 +633,20 @@ async function handle(req: Request) {
         ]);
         return json({ reports: reports.results, photos: photos.results });
       }
+      if (path[1] === "verify" && method === "POST") {
+        // Verification is granted by the moderator: "user", "business", or
+        // nothing to take it back.
+        const target = uuid(path[2]);
+        const d = await body(req);
+        const kind = d.kind === "user" || d.kind === "business" ? d.kind : null;
+        const result = await db()
+          .prepare("UPDATE users SET verified=? WHERE id=? AND demo=0")
+          .bind(kind, target)
+          .run();
+        if (!result.meta.changes) throw new HttpError(404, "This profile is unavailable.");
+        moderation(kind ? "verify_" + kind : "unverify", user.id, target);
+        return json({ ok: true, verified: kind });
+      }
       if (path[1] === "pin" && method === "POST") {
         const id = uuid(path[2]);
         const toggled = await db()
@@ -665,6 +685,7 @@ async function handle(req: Request) {
             db().prepare("DELETE FROM uploads WHERE id=?").bind(id),
           ]);
           await bucket().delete(id);
+          await removePeeksWithFrame(link);
           moderation("remove_photo", user.id, id);
           return json({ ok: true });
         }

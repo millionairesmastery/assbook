@@ -26,6 +26,8 @@ export const users = sqliteTable("users", {
   onboarded: integer().notNull().default(0),
   // 1 once the member has seen the pinned welcome at the top of their feed.
   welcomed: integer().notNull().default(0),
+  // "user" or "business" once the moderator has verified the account.
+  verified: text(),
 }, (t) => [index("users_avatar").on(t.avatar)]);
 export const sessions = sqliteTable(
   "sessions",
@@ -191,3 +193,82 @@ export const authTokens = sqliteTable("auth_tokens", {
   authVersion: integer("auth_version").notNull(),
   expires: integer().notNull(),
 }, (t) => [index("auth_tokens_user").on(t.userId, t.purpose), index("auth_tokens_expiry").on(t.expires)]);
+
+// Peeks: five-second clips that live for a day. The file goes, the record and
+// its numbers stay.
+export const peeks = sqliteTable(
+  "peeks",
+  {
+    id: text().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    caption: text().notNull().default(""),
+    contentType: text("content_type").notNull(),
+    bytes: integer().notNull(),
+    // The frame that went through the dress-code check; also the poster.
+    frame: text().notNull(),
+    created: integer().notNull(),
+    expires: integer().notNull(),
+    // 1 once the clip has been removed from storage after expiry.
+    fileGone: integer("file_gone").notNull().default(0),
+    deleted: integer().notNull().default(0),
+  },
+  (t) => [index("peeks_user").on(t.userId, t.created), index("peeks_live").on(t.deleted, t.expires)],
+);
+export const peekViews = sqliteTable(
+  "peek_views",
+  {
+    peekId: text("peek_id")
+      .notNull()
+      .references(() => peeks.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    created: integer().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.peekId, t.userId] }), index("peek_views_user").on(t.userId)],
+);
+export const peekLikes = sqliteTable(
+  "peek_likes",
+  {
+    peekId: text("peek_id")
+      .notNull()
+      .references(() => peeks.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.peekId, t.userId] })],
+);
+export const peekReplies = sqliteTable(
+  "peek_replies",
+  {
+    id: text().primaryKey(),
+    peekId: text("peek_id")
+      .notNull()
+      .references(() => peeks.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text().notNull(),
+    created: integer().notNull(),
+  },
+  (t) => [index("peek_replies_peek").on(t.peekId, t.created)],
+);
+// A re-peek points at the original clip; nothing is copied. It lives as long
+// as the original and keeps its own count of views it brought in.
+export const peekShares = sqliteTable(
+  "peek_shares",
+  {
+    peekId: text("peek_id")
+      .notNull()
+      .references(() => peeks.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    created: integer().notNull(),
+    views: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.peekId, t.userId] }), index("peek_shares_user").on(t.userId, t.created)],
+);

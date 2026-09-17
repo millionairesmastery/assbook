@@ -12,6 +12,8 @@ export type Profile = {
   following_count?: number;
   posts_count?: number;
   official?: number;
+  verified?: "user" | "business" | null;
+  has_peek?: number;
   isAdmin?: boolean;
   nameLockedUntil?: number | null;
   onboarded?: boolean;
@@ -29,6 +31,7 @@ export type Post = {
   avatar: string | null;
   demo: number;
   official: number;
+  verified?: "user" | "business" | null;
   likes: number;
   comments: number;
   liked: number;
@@ -67,4 +70,44 @@ export type FlaggedPhoto = {
   reason: string | null;
   handle: string;
   in_use: number;
+};
+export type Peek = {
+  id: string;
+  user_id?: string;
+  caption: string;
+  video: string;
+  poster: string;
+  created: number;
+  expires: number;
+  likes: number;
+  replies: number;
+  views: number;
+  repeeks: number;
+  liked: number;
+  watched: number;
+  repeeked: number;
+  creator: { id: string; handle: string; name: string; avatar: string | null; official: number; verified?: "user" | "business" | null };
+  // Set when this entry is somebody's re-peek of the creator's clip.
+  shared_by: { id: string; handle: string; name: string; views: number } | null;
+};
+export type PeekPerson = {
+  id: string;
+  handle: string;
+  name: string;
+  avatar: string | null;
+  official: number;
+  following: number;
+  unwatched: number;
+  watched: boolean;
+  peeks: Peek[];
+};
+export type PeekReply = {
+  id: string;
+  peek_id: string;
+  user_id: string;
+  body: string;
+  created: number;
+  handle: string;
+  name: string;
+  avatar: string | null;
 };

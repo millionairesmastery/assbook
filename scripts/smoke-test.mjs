@@ -316,6 +316,12 @@ try {
     assert.equal(adminProfile.official, 1);
     assert.equal(adminProfile.posts_count, 1);
     pass("Official account cannot be blocked or reported; pins sit first in the main feed");
+    await req(a, "admin/verify/" + bu.id, "POST", { kind: "user" }, 403);
+    assert.equal((await req(admin, "admin/verify/" + bu.id, "POST", { kind: "business" })).verified, "business");
+    assert.equal((await req(anon, "profile/" + handles[1])).profile.verified, "business");
+    await req(admin, "admin/verify/" + bu.id, "POST", { kind: null });
+    assert.equal((await req(anon, "profile/" + handles[1])).profile.verified, null);
+    pass("Moderator grants and removes verification");
     // Onboarding: the official account is suggested first, and "done" needs
     // the required number of follows (3, or everyone while the site is small).
     const fresh = { cookie: "" };
@@ -342,6 +348,69 @@ try {
     pass("Onboarding suggests the official account first and completes after the required follows");
     await req(a, "posts/" + later.id, "DELETE");
   } else console.log("SKIP moderator queue (set ASSBOOK_ADMIN_HANDLE and ADMIN_HANDLE in .dev.vars)");
+  // Peeks: a clip plus its checked frame, live for a day, numbers public.
+  const clip = new Uint8Array(2048);
+  clip.set([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d], 0);
+  await req(a, "peek-upload", "POST", clip, 400, { "Content-Type": "video/mp4" });
+  const uploaded = await req(a, "peek-upload", "POST", clip, 201, {
+    "Content-Type": "video/mp4",
+    "X-Photo-Rules": "accepted",
+  });
+  await req(b, "peeks", "POST", { video: uploaded.id, frame: photo.url }, 400);
+  const framePhoto = await req(a, "upload", "POST", png, 201, {
+    "X-Photo-Rules": "accepted",
+    "Content-Type": "image/png",
+  });
+  const peek = (await req(a, "peeks", "POST", { video: uploaded.id, frame: framePhoto.url, caption: "Behind me today" }, 201)).peek;
+  assert.equal(peek.id, uploaded.id);
+  await req(anon, "peeks", "GET", undefined, 401);
+  const strip = (await req(b, "peeks")).people;
+  assert.equal(strip[0].handle, handles[0], "A person with a live peek is in the strip");
+  assert.equal(strip[0].peeks[0].id, peek.id);
+  assert.equal(strip[0].watched, false);
+  const clipRes = await fetch(base + peek.video, { headers: { Cookie: b.cookie, Range: "bytes=0-99" } });
+  assert.equal(clipRes.status, 206, "Clips stream with ranges");
+  assert.equal(clipRes.headers.get("content-range"), "bytes 0-99/2048");
+  assert.equal((await fetch(base + peek.video)).status, 401, "Clips need a signed-in viewer");
+  assert.equal((await req(b, "peeks/" + peek.id + "/view", "POST", {})).views, 1);
+  await req(b, "peeks/" + peek.id + "/view", "POST", {});
+  await req(b, "peeks/" + peek.id + "/like", "PUT");
+  await req(b, "peeks/" + peek.id + "/replies", "POST", { body: "Nice behind you" }, 201);
+  const after = (await req(a, "peeks")).people.find((x) => x.handle === handles[0]).peeks[0];
+  assert.equal(after.views, 1);
+  assert.equal(after.likes, 1);
+  assert.equal(after.replies, 1);
+  assert.equal((await req(b, "peeks")).people[0].watched, true, "Watched peeks sort last and count as seen");
+  const peekReplies = (await req(a, "peeks/" + peek.id + "/replies")).replies;
+  assert.equal(peekReplies[0].body, "Nice behind you");
+  await req(a, "peeks/" + peek.id + "/replies/" + peekReplies[0].id, "DELETE");
+  // Re-peek: b shares a's clip; the entry sits in b's slot with a as creator,
+  // a fresh viewer arriving through b credits both, nothing is re-uploaded.
+  await req(a, "peeks/" + peek.id + "/repeek", "PUT", undefined, 400);
+  assert.equal((await req(b, "peeks/" + peek.id + "/repeek", "PUT")).repeeks, 1);
+  const stripB = (await req(a, "peeks")).people.find((x) => x.id === bu.id);
+  assert.ok(stripB, "The re-peeker has a slot in the strip");
+  assert.equal(stripB.peeks[0].id, peek.id);
+  assert.equal(stripB.peeks[0].creator.handle, handles[0], "The creator travels with the re-peek");
+  assert.equal(stripB.peeks[0].shared_by.id, bu.id);
+  assert.equal((await req(anon, "profile/" + handles[1])).profile.has_peek, 1, "A re-peek lights the ring");
+  const c2 = { cookie: "" };
+  const c2Handle = "test_d_" + suffix;
+  handles.push(c2Handle);
+  await req(c2, "signup", "POST", { name: "Local test d", handle: c2Handle, password, email: c2Handle + "@example.com", rules: true });
+  await req(c2, "peeks/" + peek.id + "/view", "POST", { via: bu.id });
+  const viaShare = (await req(a, "peeks")).people.find((x) => x.id === bu.id).peeks[0];
+  assert.equal(viaShare.views, 2, "The creator counts every viewer once");
+  assert.equal(viaShare.shared_by.views, 1, "The re-peeker sees views that came through them");
+  await req(b, "peeks/" + peek.id + "/repeek", "DELETE");
+  assert.ok(!(await req(a, "peeks")).people.some((x) => x.id === bu.id), "Un-re-peeking clears the slot");
+  await req(b, "peeks/" + peek.id + "/report", "POST", { reason: "Testing" }, 201);
+  assert.equal((await req(anon, "profile/" + handles[0])).profile.has_peek, 1);
+  assert.ok((await req(a, "peeks/archive")).peeks.some((x) => x.id === peek.id));
+  await req(b, "peeks/" + peek.id, "DELETE", undefined, 404);
+  await req(a, "peeks/" + peek.id, "DELETE");
+  assert.equal((await fetch(base + peek.video, { headers: { Cookie: b.cookie } })).status, 404);
+  pass("Peeks upload, publish, stream, count views, likes and replies, and go away when removed");
   await req(a, "posts/" + p.id, "DELETE");
   assert.equal((await req(anon, "feed?post=" + p.id)).posts.length, 0);
   await req(a, "logout", "POST");

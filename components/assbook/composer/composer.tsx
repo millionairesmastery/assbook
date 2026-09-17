@@ -2,12 +2,6 @@
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { ArrowRight, ImagePlus, Loader2, Video, X } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Avatar } from "@/components/assbook/avatar";
 import type { Profile } from "@/lib/types";
 
@@ -18,6 +12,7 @@ export function Composer({
   image,
   onRemoveImage,
   onAddPhoto,
+  onAddPeek,
   onSubmit,
   submitting,
   textareaRef,
@@ -28,6 +23,7 @@ export function Composer({
   image: string | null;
   onRemoveImage: () => void;
   onAddPhoto: () => void;
+  onAddPeek: () => void;
   onSubmit: () => void;
   submitting: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -76,17 +72,14 @@ export function Composer({
           <ImagePlus size={18} aria-hidden="true" />
           Photo
         </button>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="coming-soon" tabIndex={0} aria-label="Video posts are coming soon">
-                <Video size={18} aria-hidden="true" />
-                Video
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Video posts are coming soon.</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <button
+          className="quiet"
+          onClick={onAddPeek}
+          aria-label="Post a peek, five seconds of your day"
+        >
+          <Video size={18} aria-hidden="true" />
+          Peek
+        </button>
         <span>
           {draft.length
             ? draft.length + "/500"

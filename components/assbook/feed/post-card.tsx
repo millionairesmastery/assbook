@@ -2,13 +2,15 @@
 import { memo } from "react";
 import { Bookmark, Heart, MessageCircle, Pin, Send } from "lucide-react";
 import { Avatar } from "@/components/assbook/avatar";
-import { OfficialBadge } from "@/components/assbook/official-badge";
+import { NameBadge } from "@/components/assbook/account-badge";
 import { PostMenu } from "@/components/assbook/feed/post-menu";
 import { age } from "@/lib/format";
 import type { Post, Profile } from "@/lib/types";
 
 export type PostCardProps = {
   post: Post;
+  /** True when the author has a live peek: the strip is where that is known. */
+  hasPeek: boolean;
   viewer: Profile | null;
   now: number;
   likePending: boolean;
@@ -19,6 +21,7 @@ export type PostCardProps = {
   onReplies: (post: Post) => void;
   onShare: (post: Post) => void;
   onVisitProfile: (handle: string) => void;
+  onOpenPhoto: (src: string, alt: string) => void;
   onEdit: (post: Post) => void;
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
@@ -28,6 +31,7 @@ export type PostCardProps = {
 
 export const PostCard = memo(function PostCard({
   post,
+  hasPeek,
   viewer,
   now,
   likePending,
@@ -38,6 +42,7 @@ export const PostCard = memo(function PostCard({
   onReplies,
   onShare,
   onVisitProfile,
+  onOpenPhoto,
   onEdit,
   onDelete,
   onReport,
@@ -60,7 +65,7 @@ export const PostCard = memo(function PostCard({
           onClick={() => onVisitProfile(post.handle)}
           aria-label={"View " + post.name}
         >
-          <Avatar person={post} />
+          <Avatar person={post} ring={hasPeek ? "fresh" : ""} />
         </button>
         <button
           className="person-name"
@@ -68,7 +73,7 @@ export const PostCard = memo(function PostCard({
         >
           <b className="name-line">
             <span className="name-text">{post.name}</span>
-            {post.official === 1 && <OfficialBadge />}
+            <NameBadge person={post} />
             {post.demo === 1 && <span className="tiny-badge">SAMPLE</span>}
           </b>
           <span className="person-meta">
@@ -104,17 +109,30 @@ export const PostCard = memo(function PostCard({
       </div>
       <p className="post-text">{post.body}</p>
       {post.image && (
-        <img
-          className="post-photo"
-          src={post.image}
-          alt={
-            post.demo
-              ? "Three fully clothed friends in jeans against a blue wall"
-              : "Photo shared by " + post.name
+        <button
+          className="post-photo-button"
+          onClick={() =>
+            onOpenPhoto(
+              post.image!,
+              post.demo
+                ? "Three fully clothed friends in jeans against a blue wall"
+                : "Photo shared by " + post.name,
+            )
           }
-          loading="lazy"
-          decoding="async"
-        />
+          aria-label={"View the photo by " + post.name + " large"}
+        >
+          <img
+            className="post-photo"
+            src={post.image}
+            alt={
+              post.demo
+                ? "Three fully clothed friends in jeans against a blue wall"
+                : "Photo shared by " + post.name
+            }
+            loading="lazy"
+            decoding="async"
+          />
+        </button>
       )}
       <div className="post-actions">
         <button

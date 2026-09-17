@@ -28,6 +28,8 @@ export type FeedProps = {
   pending: ReadonlySet<string>;
   singlePostId: string;
   otherHandle: string;
+  /** Everybody with a live peek, so their picture gets the ring. */
+  peekPeople: ReadonlySet<string>;
   onExitSinglePost: () => void;
   onFeedTab: (tab: string) => void;
   onCompose: () => void;
@@ -37,6 +39,7 @@ export type FeedProps = {
   onReplies: (post: Post) => void;
   onShare: (post: Post) => void;
   onVisitProfile: (handle: string) => void;
+  onOpenPhoto: (src: string, alt: string) => void;
   onEdit: (post: Post) => void;
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
@@ -62,6 +65,7 @@ export function Feed({
   pending,
   singlePostId,
   otherHandle,
+  peekPeople,
   onExitSinglePost,
   onFeedTab,
   onCompose,
@@ -71,6 +75,7 @@ export function Feed({
   onReplies,
   onShare,
   onVisitProfile,
+  onOpenPhoto,
   onEdit,
   onDelete,
   onReport,
@@ -168,6 +173,7 @@ export function Feed({
           <PostCard
             key={post.id}
             post={post}
+            hasPeek={peekPeople.has(post.user_id)}
             viewer={viewer}
             now={now}
             likePending={pending.has("like:" + post.id)}
@@ -178,6 +184,7 @@ export function Feed({
             onReplies={onReplies}
             onShare={onShare}
             onVisitProfile={onVisitProfile}
+            onOpenPhoto={onOpenPhoto}
             onEdit={onEdit}
             onDelete={onDelete}
             onReport={onReport}

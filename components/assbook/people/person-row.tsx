@@ -1,8 +1,8 @@
 "use client";
 import type { ReactNode } from "react";
 import { Check, Plus } from "lucide-react";
-import { Avatar } from "@/components/assbook/avatar";
-import { OfficialBadge } from "@/components/assbook/official-badge";
+import { Avatar, type PeekRing } from "@/components/assbook/avatar";
+import { NameBadge } from "@/components/assbook/account-badge";
 import type { Profile } from "@/lib/types";
 
 /** One row in the rail, the community dialog and the blocked list. */
@@ -15,11 +15,13 @@ export function PersonRow({
   onVisit?: (handle: string) => void;
   action?: ReactNode;
 }) {
+  // A live peek puts a ring on the picture wherever the person turns up.
+  const ring: PeekRing = person.has_peek === 1 ? "fresh" : "";
   const identity = (
     <>
       <b className="name-line">
         <span className="name-text">{person.name}</span>
-        {person.official === 1 && <OfficialBadge />}
+        <NameBadge person={person} />
       </b>
       <span className="person-meta">@{person.handle}</span>
     </>
@@ -31,10 +33,10 @@ export function PersonRow({
           onClick={() => onVisit(person.handle)}
           aria-label={"View " + person.name}
         >
-          <Avatar person={person} />
+          <Avatar person={person} ring={ring} />
         </button>
       ) : (
-        <Avatar person={person} />
+        <Avatar person={person} ring={ring} />
       )}
       {onVisit ? (
         <button className="person-name" onClick={() => onVisit(person.handle)}>

@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar } from "@/components/assbook/avatar";
-import { OfficialBadge } from "@/components/assbook/official-badge";
+import { NameBadge } from "@/components/assbook/account-badge";
 import { FollowButton } from "@/components/assbook/people/person-row";
 import { usePersonSearch } from "@/hooks/use-person-search";
 import { api, errorMessage, isAbortError } from "@/lib/api-client";
@@ -192,7 +192,7 @@ export function FollowOnboardingDialog({
                   <div className="onboard-who">
                     <b className="name-line">
                       <span className="name-text">{person.name}</span>
-                      {person.official === 1 && <OfficialBadge />}
+                      <NameBadge person={person} />
                     </b>
                     <span className="onboard-meta">
                       @{person.handle}

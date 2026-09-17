@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Toaster } from "sonner";
-import { Check, Code2, LogOut, Pencil, Plus, Sparkles } from "lucide-react";
+import { Check, Code2, LogOut, Pencil, Plus, Sparkles, Video } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -43,6 +43,8 @@ export type AppShellProps = {
   onOpenRules: () => void;
   onOpenSource: () => void;
   onCompose: () => void;
+  /** Only offered to signed-in members: the strip's camera control on a phone. */
+  onPostPeek?: () => void;
   onFocusSearch: () => void;
   rail: ReactNode;
   children: ReactNode;
@@ -67,6 +69,7 @@ export function AppShell({
   onOpenRules,
   onOpenSource,
   onCompose,
+  onPostPeek,
   onFocusSearch,
   rail,
   children,
@@ -247,6 +250,15 @@ export function AppShell({
             </footer>
           </aside>
         </div>
+        {user && onPostPeek && (
+          <button
+            className="peek-fab"
+            aria-label="Post a peek, five seconds of your day"
+            onClick={onPostPeek}
+          >
+            <Video size={20} aria-hidden="true" />
+          </button>
+        )}
         <button className="compose-fab" aria-label="Write a post" onClick={onCompose}>
           <Pencil size={21} aria-hidden="true" />
         </button>

@@ -30,8 +30,13 @@ import {
 } from "@/components/assbook/auth/email-confirmed-dialog";
 import { ReportDialog } from "@/components/assbook/moderation/report-dialog";
 import { EditPostDialog } from "@/components/assbook/feed/edit-post-dialog";
+import { PhotoLightbox } from "@/components/assbook/photo-lightbox";
 import { ModerationQueueDialog } from "@/components/assbook/moderation/moderation-queue-dialog";
 import { RepliesDialog } from "@/components/assbook/replies/replies-dialog";
+import { PeeksStrip } from "@/components/assbook/peeks/peeks-strip";
+import { PeekViewer } from "@/components/assbook/peeks/peek-viewer";
+import { PeekArchive } from "@/components/assbook/peeks/peek-archive";
+import { PostPeekDialog } from "@/components/assbook/peeks/post-peek-dialog";
 import {
   RulesDialog,
   ShareDialog,
@@ -48,6 +53,7 @@ import {
 import { useAsyncAction } from "@/hooks/use-async-action";
 import { useFeed } from "@/hooks/use-feed";
 import { useNow } from "@/hooks/use-now";
+import { usePeeks } from "@/hooks/use-peeks";
 import { usePeople } from "@/hooks/use-people";
 import { usePersonSearch } from "@/hooks/use-person-search";
 import { useProfile } from "@/hooks/use-profile";
@@ -127,8 +133,12 @@ export default function Assbook({
   const [replyPost, setReplyPost] = useState<Post | null>(null);
   const [reportPost, setReportPost] = useState<Post | null>(null);
   const [editPost, setEditPost] = useState<Post | null>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const openPhoto = useCallback((src: string, alt: string) => setLightbox({ src, alt }), []);
   const [shareLink, setShareLink] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
+  // Whose peeks the player is open on, or "" when it is closed.
+  const [peekPerson, setPeekPerson] = useState("");
 
   const [draft, setDraft] = useState("");
   const [postImage, setPostImage] = useState<string | null>(null);
@@ -173,6 +183,7 @@ export default function Assbook({
   });
   const peopleSearch = usePersonSearch(search);
   const people = usePeople(viewerId, appReady);
+  const peeks = usePeeks(viewerId, appReady);
   const topPosts = useTopPosts(viewerId, appReady);
   const profileView = useProfile(profileTarget, viewerId, appReady);
 
@@ -188,6 +199,14 @@ export default function Assbook({
   } = feed;
   const { patchFollowing: patchPersonFollowing, revalidate: revalidatePeople } =
     people;
+  const {
+    people: peekPeople,
+    load: loadPeeks,
+    patchPeek,
+    removePeek,
+    revalidate: revalidatePeeks,
+    withPeeks,
+  } = peeks;
   // Asks /api/me again. Used after onboarding, so `onboarded` stops being false.
   const { retry: refreshViewer } = viewer;
   const {
@@ -471,11 +490,12 @@ export default function Assbook({
     setOnboardingClosed(true);
     refreshViewer();
     revalidatePeople();
+    revalidatePeeks();
     // New members land on Everyone, where the pinned welcome post sits at the
     // top. The Following tab is one tap away with the people they picked.
     chooseFeedTab("everyone");
     toast.success("You are in. Following shows the people you picked.");
-  }, [chooseFeedTab, refreshViewer, revalidatePeople]);
+  }, [chooseFeedTab, refreshViewer, revalidatePeeks, revalidatePeople]);
 
   const submitPost = useCallback(() => {
     if (!requireUser()) return;
@@ -556,12 +576,13 @@ export default function Assbook({
         await api("block/" + post.user_id, { method: "PUT" });
         revalidateFeed();
         revalidatePeople();
+        revalidatePeeks();
         toast.success(
           "You’ve left them behind. Manage blocks in your account menu.",
         );
       });
     },
-    [requireUser, revalidateFeed, revalidatePeople, run],
+    [requireUser, revalidateFeed, revalidatePeeks, revalidatePeople, run],
   );
 
   const openReport = useCallback(
@@ -572,6 +593,32 @@ export default function Assbook({
     },
     [requireUser],
   );
+
+  // Opening somebody's peeks from a ring anywhere on the page. The strip is
+  // the only list of who has one, so it is asked for if it has not been yet.
+  const openPeeks = useCallback(
+    (personId: string) => {
+      if (!requireUser()) return;
+      if (peekPeople.some((person) => person.id === personId)) {
+        setPeekPerson(personId);
+        return;
+      }
+      void loadPeeks()
+        .then((list) => {
+          if (list.some((person) => person.id === personId))
+            setPeekPerson(personId);
+        })
+        .catch(() => {
+          // A ring that leads nowhere is not worth an error on screen.
+        });
+    },
+    [loadPeeks, peekPeople, requireUser],
+  );
+
+  const openPostPeek = useCallback(() => {
+    if (!requireUser()) return;
+    setModal("post-peek");
+  }, [requireUser]);
 
   const openReplies = useCallback((post: Post) => {
     setReplyPost(post);
@@ -762,6 +809,9 @@ export default function Assbook({
           onClose={closeModal}
         />
       )}
+      {lightbox && (
+        <PhotoLightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />
+      )}
       {modal === "edit-post" && editPost && (
         <EditPostDialog
           post={editPost}
@@ -774,7 +824,32 @@ export default function Assbook({
         />
       )}
       {modal === "report" && reportPost && (
-        <ReportDialog post={reportPost} onClose={closeModal} />
+        <ReportDialog
+          path={"report/" + reportPost.id}
+          onClose={closeModal}
+        />
+      )}
+      {modal === "post-peek" && (
+        <PostPeekDialog
+          onPosted={() => {
+            setModal("");
+            revalidatePeeks();
+            toast.success("Your peek is up for 24 hours.");
+          }}
+          onClose={closeModal}
+        />
+      )}
+      {peekPerson && peekPeople.length > 0 && (
+        <PeekViewer
+          key={peekPerson}
+          people={peekPeople}
+          startPersonId={peekPerson}
+          viewer={user}
+          now={now}
+          onPatch={patchPeek}
+          onRemove={removePeek}
+          onClose={() => setPeekPerson("")}
+        />
       )}
       {followList && profileView.profile && (
         <FollowListDialog
@@ -795,6 +870,7 @@ export default function Assbook({
           onUnblocked={() => {
             revalidateFeed();
             revalidatePeople();
+            revalidatePeeks();
           }}
           onClose={closeModal}
         />
@@ -864,6 +940,7 @@ export default function Assbook({
         onOpenRules={() => setInfoModal("rules")}
         onOpenSource={() => setInfoModal("source")}
         onCompose={startPost}
+        onPostPeek={user ? openPostPeek : undefined}
         onFocusSearch={focusSearch}
         rail={
           <>
@@ -916,6 +993,7 @@ export default function Assbook({
           <ProfileCard
             profile={profileView.profile}
             viewer={user}
+            onOpenPhoto={openPhoto}
             loading={profileView.loading}
             error={profileView.error}
             onRetry={profileView.retry}
@@ -929,6 +1007,19 @@ export default function Assbook({
             followPending={pending.has(
               "follow:" + (profileView.profile?.id ?? ""),
             )}
+            onOpenPeek={openPeeks}
+          />
+        )}
+        {view === "profile" && ownProfile && user && <PeekArchive now={now} />}
+        {view === "feed" && !query && !postId && user && (
+          <PeeksStrip
+            viewer={user}
+            people={peekPeople}
+            loading={peeks.loading}
+            error={peeks.error}
+            onRetry={peeks.retry}
+            onOpenPerson={openPeeks}
+            onPostPeek={openPostPeek}
           />
         )}
         {view === "feed" && !query && !postId && (
@@ -941,6 +1032,7 @@ export default function Assbook({
             onAddPhoto={() => {
               if (requireUser()) setModal("upload");
             }}
+            onAddPeek={openPostPeek}
             onSubmit={submitPost}
             submitting={pending.has("post")}
             textareaRef={draftRef}
@@ -976,6 +1068,7 @@ export default function Assbook({
             pending={pending}
             singlePostId={singlePostId}
             otherHandle={otherHandle}
+            peekPeople={withPeeks}
             onExitSinglePost={exitSinglePost}
             onFeedTab={chooseFeedTab}
             onCompose={startPost}
@@ -985,6 +1078,7 @@ export default function Assbook({
             onReplies={openReplies}
             onShare={share}
             onVisitProfile={visitProfile}
+            onOpenPhoto={openPhoto}
             onEdit={openEdit}
             onDelete={deletePost}
             onReport={openReport}

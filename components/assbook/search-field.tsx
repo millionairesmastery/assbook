@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
 import { Search, X } from "lucide-react";
 import { Avatar } from "@/components/assbook/avatar";
-import { OfficialBadge } from "@/components/assbook/official-badge";
+import { NameBadge } from "@/components/assbook/account-badge";
 import type { Profile } from "@/lib/types";
 
 const BIO_PREVIEW = 60;
@@ -174,7 +174,7 @@ export function SearchField({
                 <span className="typeahead-text">
                   <b>
                     <span className="name-text">{person.name}</span>
-                    {person.official === 1 && <OfficialBadge focusable={false} />}
+                    <NameBadge person={person} focusable={false} />
                   </b>
                   <span className="person-meta">@{person.handle}</span>
                   {person.bio.trim() && (

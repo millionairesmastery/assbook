@@ -1259,22 +1259,24 @@ h2 {
 
 /* The one account that speaks for Assbook itself: a small round check that
    sits next to the name and explains itself in a tooltip. */
-.official-badge {
-  display: inline-grid;
-  place-items: center;
+/* The seal after a name. The SVG fills the box, so it sits dead centre. */
+.account-badge {
+  display: inline-flex;
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  border-radius: 50%;
   margin-left: 4px;
-  background: #214cd8;
-  color: #fff;
   vertical-align: -4px;
   cursor: help;
+  line-height: 0;
 }
-.official-badge:focus-visible {
+.account-badge svg {
+  display: block;
+}
+.account-badge:focus-visible {
   outline: 3px solid #c94120;
   outline-offset: 2px;
+  border-radius: 50%;
 }
 
 /* A post a moderator parked at the top of the feed. */
@@ -2247,19 +2249,538 @@ button.stat:hover {
   color: #b3261e;
 }
 
-/* A feature that is on its way: looks like the buttons next to it, does nothing yet. */
-.coming-soon {
+
+/* ---------------------------------------------------------------------------
+   Peeks: five seconds of somebody's day, gone in a day. A strip above the
+   feed, a full-screen player, and the ring that marks anybody with one.
+   ------------------------------------------------------------------------ */
+.peek-ring {
+  display: inline-flex;
+  padding: 2.5px;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #ffa53d, #ee5029 55%, #c8341a);
+  flex-shrink: 0;
+}
+.peek-ring.is-round {
+  border-radius: 50%;
+}
+/* Everything behind this ring has already been watched. */
+.peek-ring.is-watched {
+  background: #ccd2d9;
+}
+/* Your own slot before you have posted anything today. */
+.peek-ring.is-empty {
+  background: #e0e4e9;
+}
+.peek-ring > .avatar {
+  border: 2px solid #fff;
+}
+.avatar.is-round,
+.peek-ring.is-round > .avatar {
+  border-radius: 50%;
+}
+.profile-peek {
+  background: none;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.peeks-strip {
+  margin-bottom: 14px;
+}
+.peeks-row {
+  display: flex;
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 2px 2px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.peek-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 72px;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.peek-avatar {
+  position: relative;
+  display: inline-flex;
+}
+.peek-avatar .avatar {
+  width: 52px;
+  height: 52px;
+}
+.peek-avatar.is-waiting {
+  width: 61px;
+  height: 61px;
+  border-radius: 50%;
+  background: #e9ecf0;
+}
+.peek-plus {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ee5029;
+  color: #fff;
+  border: 2px solid #fff;
+}
+.peek-name {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 72px;
+  font-size: 12px;
+  color: #3c454d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.peeks-retry {
+  font-size: 12px;
+}
+
+/* The player. A 9:16 stage in the middle of the room on a desktop, the whole
+   screen on a phone. */
+.peek-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  transform: none !important;
+  /* The dialog centres itself with the translate property, not transform. */
+  translate: none !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #0b0d0f !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.peek-stage {
+  position: relative;
+  width: min(100vw, calc((100svh - 40px) * 9 / 16));
+  height: min(calc(100svh - 40px), calc(100vw * 16 / 9));
+  border-radius: 18px;
+  background: #000;
+  overflow: hidden;
+}
+.peek-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.peek-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.peek-zone {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.peek-zone:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: -7px;
+}
+.peek-top,
+.peek-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  color: #fff;
+  /* The bars and the gradients are scenery: taps go to the zones underneath,
+     the controls take their own. */
+  pointer-events: none;
+}
+.peek-top button,
+.peek-bottom button,
+.peek-bottom .peek-views {
+  pointer-events: auto;
+}
+.peek-top {
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 24px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62), transparent);
+}
+.peek-bars {
+  display: flex;
+  gap: 3px;
+}
+.peek-bar {
+  flex: 1;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.34);
+  overflow: hidden;
+}
+.peek-bar-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: #fff;
+}
+.peek-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.peek-who .avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+.peek-who-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+.peek-who-text .name-line {
+  font-size: 14px;
+}
+.peek-who-meta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.78);
+}
+.peek-shared {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #ffc9b4;
+}
+.peek-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.peek-icon:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.peek-bottom {
+  bottom: 0;
+  padding: 30px 14px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.75), transparent);
+}
+.peek-caption {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.peek-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.peek-actions button,
+.peek-views {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #9aa3ab;
-  cursor: help;
+  padding: 8px 4px;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
 }
-.coming-soon:focus-visible {
-  outline: 2px solid #c94120;
-  outline-offset: 2px;
+.peek-actions .selected {
+  color: #ff7d52;
+}
+.peek-views {
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 600;
+}
+.peek-more {
+  margin-left: auto;
+}
+.peek-failed {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.74);
+}
+.peek-failed .quiet {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+/* Replies to a peek: a sheet on a phone, a dialog on a desktop. */
+.peek-sheet {
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom)) !important;
+  border-radius: 18px 18px 0 0 !important;
+  gap: 0 !important;
+  max-height: 86svh;
+  overflow-y: auto;
+}
+.peek-sheet-head {
+  padding: 0 0 6px !important;
+  gap: 2px !important;
+}
+.peek-sheet [data-slot="sheet-title"] {
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.peek-sheet .comment-list,
+.peek-replies-dialog .comment-list {
+  max-height: 46svh;
+}
+
+/* Posting one: the camera, or a file, and the same dress code either way. */
+.peek-ways {
+  display: grid;
+  gap: 12px;
+}
+.peek-ways .upload-box {
+  width: 100%;
+  font: inherit;
+  text-align: center;
+}
+.peek-camera {
+  position: relative;
+}
+.peek-camera-view,
+.peek-preview {
+  display: block;
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #101316;
+}
+.peek-preview {
+  object-fit: contain;
+}
+.peek-countdown {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+}
+.peek-countdown svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.peek-countdown-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 4;
+}
+.peek-countdown-fill {
+  fill: none;
+  stroke: #ee5029;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.peek-countdown b {
+  position: relative;
+  color: #fff;
+  font-size: 15px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.peek-camera-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.peek-again {
+  align-self: flex-start;
+}
+
+/* Your own past peeks, on your own profile. Read only: the clips are gone. */
+.peek-archive {
+  padding: 14px 16px 16px;
+  margin-bottom: 16px;
+}
+.peek-archive ul {
+  display: flex;
+  gap: 12px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-x: auto;
+}
+.peek-archive li {
+  width: 64px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.peek-archive-frame {
+  width: 64px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 9px;
+  background: #f1f3f5;
+}
+.peek-archive-when,
+.peek-archive-counts {
+  font-size: 11px;
+  color: #5f6b75;
+}
+.peek-archive-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.peek-archive-counts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.peek-fab {
+  display: none;
+}
+@media (max-width: 650px) {
+  /* Full bleed, and every control worth a thumb. */
+  .peek-stage {
+    width: 100vw;
+    height: 100svh;
+    border-radius: 0;
+  }
+  .peek-video {
+    object-fit: cover;
+  }
+  .peek-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .peek-actions {
+    gap: 10px;
+  }
+  .peek-actions button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .peek-item {
+    width: 76px;
+  }
+  .peek-fab {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    right: 16px;
+    bottom: calc(138px + env(safe-area-inset-bottom));
+    z-index: 29;
+    width: 52px;
+    height: 52px;
+    border: 1px solid #e4e7eb;
+    border-radius: 50%;
+    background: #fff;
+    color: #d3401c;
+    box-shadow: 0 6px 18px rgba(34, 39, 43, 0.18);
+  }
+}
+
+/* Photos open large: the post photo and the profile photo are buttons. */
+.post-photo-button,
+.profile-photo-button {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  width: 100%;
+}
+.profile-photo-button {
+  width: auto;
+  border-radius: 18px;
+}
+.post-photo-button:focus-visible,
+.profile-photo-button:focus-visible {
+  outline: 3px solid #c94120;
+  outline-offset: 3px;
+}
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 14, 18, 0.88);
+  z-index: 60;
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.lightbox img {
+  max-width: min(calc(100vw - 48px), 1200px);
+  max-height: calc(100svh - 48px);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  object-fit: contain;
+}
+.lightbox-close {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+}
+.lightbox-close:hover,
+.lightbox-close:focus-visible {
+  background: rgba(255, 255, 255, 0.28);
+  outline: none;
 }

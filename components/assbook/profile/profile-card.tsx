@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar } from "@/components/assbook/avatar";
-import { OfficialBadge } from "@/components/assbook/official-badge";
+import { NameBadge } from "@/components/assbook/account-badge";
 import { joined, linkLabel, plural, webLink } from "@/lib/format";
 import type { Profile } from "@/lib/types";
 
@@ -26,6 +26,8 @@ export function ProfileCard({
   onTab,
   onFollow,
   followPending,
+  onOpenPeek,
+  onOpenPhoto,
 }: {
   profile: Profile | null;
   viewer: Profile | null;
@@ -41,6 +43,9 @@ export function ProfileCard({
   onTab: (tab: string) => void;
   onFollow: (person: Profile) => void;
   followPending: boolean;
+  /** Opens their peeks. Only offered when they have one running. */
+  onOpenPeek?: (personId: string) => void;
+  onOpenPhoto?: (src: string, alt: string) => void;
 }) {
   if (error)
     return (
@@ -72,11 +77,29 @@ export function ProfileCard({
   return (
     <section className="profile-header card">
       <div className="profile-top">
-        <Avatar person={profile} large />
+        {viewer && profile.has_peek === 1 && onOpenPeek ? (
+          <button
+            className="profile-peek"
+            onClick={() => onOpenPeek(profile.id)}
+            aria-label={"Watch " + profile.name + "’s peeks"}
+          >
+            <Avatar person={profile} large ring="fresh" />
+          </button>
+        ) : profile.avatar && onOpenPhoto ? (
+          <button
+            className="profile-photo-button"
+            onClick={() => onOpenPhoto(profile.avatar!, profile.name + "’s profile photo")}
+            aria-label={"View " + profile.name + "’s profile photo large"}
+          >
+            <Avatar person={profile} large />
+          </button>
+        ) : (
+          <Avatar person={profile} large />
+        )}
         <div className="profile-identity">
           <h2 className="name-line">
             <span className="name-wrap">{profile.name}</span>
-            {profile.official === 1 && <OfficialBadge />}
+            <NameBadge person={profile} />
             {profile.demo === 1 && <span className="tiny-badge">SAMPLE</span>}
           </h2>
           <p className="person-meta">@{profile.handle}</p>

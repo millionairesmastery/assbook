@@ -190,7 +190,7 @@ export async function viewer(req: Request) {
   if (!/^[a-f0-9-]{72}$/.test(token)) return null;
   const user = await db()
     .prepare(
-      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,u.name_changed_at,u.onboarded FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND s.auth_version=u.auth_version",
+      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,u.verified,u.name_changed_at,u.onboarded FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND s.auth_version=u.auth_version",
     )
     .bind(await hash(token), Date.now())
     .first<Omit<Profile, "onboarded"> & { name_changed_at: number | null; onboarded: number }>();
@@ -275,6 +275,9 @@ export async function housekeeping() {
     .bind(now - 86400000)
     .all<{ id: string }>();
   for (const row of orphans.results) await deleteUnusedUpload(row.id);
+  // Expired peeks lose their clip; the record stays.
+  const { purgePeekFiles } = await import("./peeks");
+  await purgePeekFiles();
 }
 // Removes a photo from R2 and the uploads table if nothing references it.
 export async function deleteUnusedUpload(id: string) {

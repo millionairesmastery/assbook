@@ -11,13 +11,16 @@ import {
 } from "@/components/ui/dialog";
 import { CharCounter, useCharCounter } from "@/components/assbook/char-counter";
 import { api, errorMessage } from "@/lib/api-client";
-import type { Post } from "@/lib/types";
 
+/**
+ * One report form for anything a moderator can look at. The caller says where
+ * it goes: "report/<post id>" for a post, "peeks/<peek id>/report" for a clip.
+ */
 export function ReportDialog({
-  post,
+  path,
   onClose,
 }: {
-  post: Post;
+  path: string;
   onClose: () => void;
 }) {
   const [reason, setReason] = useState("");
@@ -30,7 +33,7 @@ export function ReportDialog({
     setBusy(true);
     setError("");
     try {
-      await api("report/" + post.id, { method: "POST", body: { reason } });
+      await api(path, { method: "POST", body: { reason } });
       toast.success("Report saved for moderator review. Thank you.");
       onClose();
     } catch (cause) {
