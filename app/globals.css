@@ -2229,3 +2229,20 @@ button.stat:hover {
     display: none;
   }
 }
+
+/* Live handle status under the signup field. */
+.handle-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #5f6b75;
+  margin-top: 4px;
+  min-height: 16px;
+}
+.handle-status.is-ok {
+  color: #1f7a3a;
+}
+.handle-status.is-no {
+  color: #b3261e;
+}

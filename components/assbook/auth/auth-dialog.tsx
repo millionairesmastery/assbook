@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Check, Loader2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { api, errorMessage } from "@/lib/api-client";
+import { api, errorMessage, isAbortError } from "@/lib/api-client";
 import type { Profile } from "@/lib/types";
+
+type HandleReason = "taken" | "reserved" | "invalid";
+type HandleCheck =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "ok"; handle: string }
+  | { state: "no"; handle: string; reason: HandleReason };
+type RemoteCheck = { handle: string; available: boolean; reason?: HandleReason };
+
+const HANDLE_COPY: Record<"taken" | "reserved" | "invalid", string> = {
+  taken: "is already taken. Try another.",
+  reserved: "is reserved. Try another.",
+  invalid: "needs 3 to 24 letters, numbers or underscores.",
+};
 
 export function AuthDialog({
   initialMode = "signup",
@@ -33,7 +47,48 @@ export function AuthDialog({
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [handle, setHandle] = useState("");
+  const [remote, setRemote] = useState<RemoteCheck | null>(null);
   const signup = mode === "signup";
+  const value = handle.trim().toLowerCase();
+  const shape: "idle" | "invalid" | "valid" = !value
+    ? "idle"
+    : /^[a-z0-9_]{3,24}$/.test(value)
+      ? "valid"
+      : "invalid";
+
+  // Live availability while typing on signup: a short pause, one request,
+  // stale answers ignored. The server checks again on submit anyway.
+  useEffect(() => {
+    if (!signup || shape !== "valid") return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      api<{ available: boolean; reason?: HandleReason }>(
+        "handle/" + encodeURIComponent(value),
+        { signal: controller.signal },
+      )
+        .then((result) => setRemote({ handle: value, ...result }))
+        .catch((cause: unknown) => {
+          if (!isAbortError(cause)) setRemote(null);
+        });
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [value, shape, signup]);
+
+  const check: HandleCheck =
+    shape === "idle"
+      ? { state: "idle" }
+      : shape === "invalid"
+        ? { state: "no", handle: value, reason: "invalid" }
+        : remote && remote.handle === value
+          ? remote.available
+            ? { state: "ok", handle: value }
+            : { state: "no", handle: value, reason: remote.reason ?? "taken" }
+          : { state: "checking" };
+  const handleBlocked = signup && check.state === "no";
 
   const submit = async (form: HTMLFormElement) => {
     if (busy) return;
@@ -118,7 +173,40 @@ export function AuthDialog({
               pattern="[a-zA-Z0-9_]{3,24}"
               autoComplete="username"
               placeholder="jeanclaude"
+              value={handle}
+              onChange={(event) => setHandle(event.target.value)}
+              aria-describedby={signup ? "handle-status" : undefined}
+              aria-invalid={handleBlocked || undefined}
             />
+            {signup && (
+              <span
+                id="handle-status"
+                className={
+                  "handle-status " +
+                  (check.state === "ok" ? "is-ok" : check.state === "no" ? "is-no" : "")
+                }
+                role="status"
+              >
+                {check.state === "checking" && (
+                  <>
+                    <Loader2 className="spin" size={13} aria-hidden="true" /> Checking…
+                  </>
+                )}
+                {check.state === "ok" && (
+                  <>
+                    <Check size={13} aria-hidden="true" /> @{check.handle} is free. Your address
+                    will be {typeof window === "undefined" ? "" : window.location.host}/@
+                    {check.handle}
+                  </>
+                )}
+                {check.state === "no" && (
+                  <>
+                    <X size={13} aria-hidden="true" /> @{check.handle} {HANDLE_COPY[check.reason]}
+                  </>
+                )}
+                {check.state === "idle" && "Your handle is your address. It cannot be changed later."}
+              </span>
+            )}
           </label>
           <label>
             Password
@@ -160,7 +248,7 @@ export function AuthDialog({
               </p>
             </>
           )}
-          <button className="primary" disabled={busy || (signup && !agreed)}>
+          <button className="primary" disabled={busy || (signup && (!agreed || handleBlocked))}>
             {busy && <Loader2 className="spin" size={17} aria-hidden="true" />}
             {signup ? "Join the backside" : "Sign in"}
             <ArrowRight size={16} aria-hidden="true" />

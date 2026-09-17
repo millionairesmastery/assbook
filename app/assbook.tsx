@@ -80,10 +80,13 @@ function storeTab(tab: FeedTab) {
 
 export default function Assbook({
   knownVisitor = false,
+  initialProfile = "",
 }: {
   // Set by the server when the request carried no session cookie and no deep
   // link, so the landing page is part of the first HTML.
   knownVisitor?: boolean;
+  // Set by the /@handle route: open straight onto that profile.
+  initialProfile?: string;
 }) {
   const viewer = useViewer(knownVisitor);
   const user = viewer.user;
@@ -103,7 +106,9 @@ export default function Assbook({
   const [postId, setPostId] = useState("");
   // Null until the address bar has been read. A shared ?post= or ?profile=
   // link opens the app itself, signed in or not, so the content is there.
-  const [deepLink, setDeepLink] = useState<boolean | null>(knownVisitor ? false : null);
+  const [deepLink, setDeepLink] = useState<boolean | null>(
+    initialProfile ? true : knownVisitor ? false : null,
+  );
 
   const [modal, setModal] = useState("");
   const [infoModal, setInfoModal] = useState("");
@@ -226,7 +231,7 @@ export default function Assbook({
     };
     const readSearch = () => {
       const params = new URLSearchParams(location.search);
-      const handle = params.get("profile");
+      const handle = initialProfile || params.get("profile");
       const single = params.get("post");
       const auth = params.get("auth");
       if (handle) {
@@ -256,7 +261,7 @@ export default function Assbook({
     readFragment();
     window.addEventListener("hashchange", readFragment);
     return () => window.removeEventListener("hashchange", readFragment);
-  }, []);
+  }, [initialProfile]);
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(search), 250);
@@ -308,7 +313,7 @@ export default function Assbook({
     setSearch("");
     setQuery("");
     setPostId("");
-    history.replaceState(null, "", "/?profile=" + encodeURIComponent(handle));
+    history.replaceState(null, "", "/@" + encodeURIComponent(handle));
     window.scrollTo({ top: 0, behavior: "smooth" });
     setFollowList("");
     setModal("");

@@ -131,6 +131,11 @@ try {
   assert.equal((await req(anon, "profile/" + handles[0])).profile.link, "https://example.com/pants");
   await req(a, "profile", "PUT", { link: "" });
   assert.equal((await req(anon, "profile/" + handles[0])).profile.link, null);
+  assert.equal((await req(anon, "handle/" + handles[0])).available, false);
+  assert.equal((await req(anon, "handle/" + handles[0])).reason, "taken");
+  assert.equal((await req(anon, "handle/admin")).reason, "reserved");
+  assert.equal((await req(anon, "handle/ab")).reason, "invalid");
+  assert.equal((await req(anon, "handle/free_" + suffix)).available, true);
   const found = (await req(anon, "search/people?q=" + handles[0].slice(0, 6))).people;
   assert.ok(found.some((x) => x.id === au.id), "Typeahead finds a handle prefix");
   assert.equal((await req(anon, "search/people?q=")).people.length, 0);

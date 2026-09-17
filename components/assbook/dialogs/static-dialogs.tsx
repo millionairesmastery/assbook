@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { ArrowUpRight, Code2 } from "lucide-react";
 import {
   Dialog,
@@ -54,9 +55,9 @@ export function RulesDialog({ onClose }: { onClose: () => void }) {
             moderator reviews anything the check is unsure about, and every
             report is read by a person.
           </p>
-          <a className="text-link" href="/rules">
+          <Link className="text-link" href="/rules">
             Read the full rules <ArrowUpRight size={14} aria-hidden="true" />
-          </a>
+          </Link>
         </div>
       </DialogContent>
     </Dialog>

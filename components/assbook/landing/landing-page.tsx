@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { BadgeCheck, Heart, Shield, Users } from "lucide-react";
 import { Toaster } from "sonner";
 import { SiteHeader } from "./site-header";
@@ -90,9 +91,9 @@ export function LandingPage({
             is your own fully clothed behind. Everything else is normal: posts,
             replies, likes, people worth following. Free to join, made for
             adults, and run by people who read every report.{" "}
-            <a className="landing-more" href="/about">
+            <Link className="landing-more" href="/about">
               Read the whole story
-            </a>
+            </Link>
           </p>
           <div className="landing-actions">
             <button type="button" className="primary" onClick={onJoin}>

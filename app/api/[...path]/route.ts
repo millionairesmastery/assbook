@@ -1,4 +1,4 @@
-import { authRoute } from "@/lib/auth";
+import { authRoute, handleAvailability } from "@/lib/auth";
 import { checkPhoto, type PhotoTarget } from "@/lib/moderation";
 import {
   db,
@@ -173,6 +173,12 @@ async function handle(req: Request) {
             .all()
         ).results,
       });
+    }
+    if (path[0] === "handle" && method === "GET") {
+      // Live check while somebody types their handle on the signup form.
+      await readLimit(req, "search", 60);
+      const result = await handleAvailability(String(path[1] ?? "").slice(0, 40));
+      return json(result);
     }
     if (path[0] === "search" && path[1] === "people" && method === "GET") {
       // Typeahead for the search box: names and handles, best matches first.

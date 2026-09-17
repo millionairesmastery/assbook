@@ -16,6 +16,18 @@ async function ipLimit(req: Request, category: string, max = 20) {
   await rate(category + ":ip:" + await hash(clientIp(req)), max, 900000);
 }
 const handleWindow = 900000;
+// Handles nobody may register: the site's own names and words that would
+// look official or confuse links.
+export const reservedHandles = ["admin", "assbook", "support", "moderator", "help", "official", "staff", "team", "mod", "root", "system"];
+export const handlePattern = /^[a-z0-9_]{3,24}$/;
+/** Whether a handle can still be registered, and why not if it cannot. */
+export async function handleAvailability(raw: string) {
+  const handle = raw.trim().toLowerCase();
+  if (!handlePattern.test(handle)) return { handle, available: false, reason: "invalid" as const };
+  if (reservedHandles.includes(handle)) return { handle, available: false, reason: "reserved" as const };
+  const taken = await db().prepare("SELECT 1 FROM users WHERE handle=?").bind(handle).first();
+  return taken ? { handle, available: false, reason: "taken" as const } : { handle, available: true as const };
+}
 async function account(id: string) {
   const user = await db().prepare("SELECT id,handle,password,salt,email,auth_version FROM users WHERE id=? AND demo=0").bind(id).first<Account>();
   if (!user) throw new HttpError(401, "Please sign in again.");
@@ -94,7 +106,7 @@ export async function authRoute(req: Request, path: string): Promise<Response | 
     const password = passwordInput(data.password, path === "signup");
     if (path === "signup") {
       if (data.rules !== true) throw new HttpError(400, "Please agree to the community rules.");
-      if (["admin", "assbook", "support", "moderator"].includes(handle)) throw new HttpError(400, "Please choose another handle.");
+      if (reservedHandles.includes(handle)) throw new HttpError(400, "Please choose another handle.");
       const email = emailInput(data.email), name = str(data.name, 40, 1), salt = crypto.randomUUID(), id = crypto.randomUUID();
       await rate("verify:email:" + await hash(email), 3, 3600000);
       const stored = await passwordHash(password, salt);
