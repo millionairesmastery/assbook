@@ -25,6 +25,7 @@ export function PhotoUploadDialog({
 }) {
   // The preview URL is created in the change handler, never during render, and
   // released when it is replaced or when the dialog goes away.
+  const avatar = target === "avatar";
   const [picked, setPicked] = useState<{ file: File; url: string } | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState("");
@@ -70,9 +71,11 @@ export function PhotoUploadDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="assbook-dialog">
         <DialogHeader>
-          <DialogTitle>Pants on. Camera ready.</DialogTitle>
+          <DialogTitle>{avatar ? "Pants on. Camera behind you." : "Add a photo."}</DialogTitle>
           <DialogDescription>
-            Only your own photos. Fully clothed, always.
+            {avatar
+              ? "Your own fully clothed behind. No underwear, no swimwear, no exceptions."
+              : "Your own photo, or one you have permission to share. Beach days welcome; nudity is not."}
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -83,7 +86,7 @@ export function PhotoUploadDialog({
         <div className="form-stack">
           <label className="upload-box">
             <ImagePlus size={30} aria-hidden="true" />
-            <b>Choose your photo</b>
+            <b>{avatar ? "Choose your profile photo" : "Choose a photo"}</b>
             <span>JPEG, PNG, or WebP · up to 2 MB</span>
             <input
               type="file"
@@ -108,9 +111,9 @@ export function PhotoUploadDialog({
               aria-labelledby="photo-rules-text"
             />
             <span id="photo-rules-text">
-              {target === "avatar"
-                ? "This is my own behind, fully clothed."
-                : "This is my photo, everyone is fully clothed, and I have permission to share it."}
+              {avatar
+                ? "This is my own behind, fully clothed, and I am happy to share it."
+                : "This is my photo (or I have permission to share it), and it shows no nudity or sexual content."}
             </span>
           </label>
           <button

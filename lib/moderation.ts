@@ -168,21 +168,20 @@ function decide(answer: Answer | null, target: PhotoTarget): PhotoVerdict {
       verdict: "reject",
       reason: "This looks like it shows nudity or sexual content, which is not allowed here.",
     };
-  // Bare skin, underwear or swimwear: a profile photo is rejected, a post
-  // photo is stored but waits for a moderator. A mention of buttocks with no
-  // real garment named counts as bare.
+  // Bare skin, underwear or swimwear: a profile photo is rejected. A post
+  // photo is fine (beach days are allowed) as long as there is no nudity,
+  // which was handled above. A mention of buttocks with no real garment
+  // named counts as bare.
   const skin =
     clothing === "revealing" ||
     underwear ||
     SKIN_WORDS.test(description) ||
     (people > 0 && !garmentNamed && /\b(buttocks|bottom|butt|behind|rear)\b/i.test(description));
-  if (skin)
-    return target === "avatar"
-      ? {
-          verdict: "reject",
-          reason: "A profile photo has to be your own fully clothed behind. Underwear and swimwear do not count.",
-        }
-      : { verdict: "unsure", reason: "The automatic check saw revealing clothing or bare skin." + seen };
+  if (skin && target === "avatar")
+    return {
+      verdict: "reject",
+      reason: "A profile photo has to be your own fully clothed behind. Underwear and swimwear do not count.",
+    };
   if (target === "avatar") {
     const behind = people > 0 && view === "behind" && clothing === "clothed" && garmentNamed;
     if (behind && sure) return { verdict: "allow", reason: "" };

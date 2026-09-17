@@ -16,10 +16,11 @@ export function RulesContent() {
       <p>
         Every photo you upload must be of you or taken with the clear permission
         of the person in it. Profile photos show your own behind, fully clothed:
-        jeans, trousers, skirts, dresses, shorts. Underwear, swimwear and any
-        nudity are not allowed anywhere on Assbook, in profile photos or in
-        posts. Every upload is checked automatically before it is stored, and a
-        moderator reviews anything the check is unsure about.
+        jeans, trousers, skirts, dresses, shorts. Underwear and swimwear do not
+        count as clothed for a profile photo. Post photos are yours to choose,
+        beach days included, but nudity and sexual content are not allowed
+        anywhere on Assbook. Every upload is checked automatically before it is
+        stored, and a moderator reviews anything the check is unsure about.
       </p>
       <h2>3. Be kind</h2>
       <p>

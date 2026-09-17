@@ -9,8 +9,8 @@ import { SiteFooter } from "./site-footer";
 const features = [
   {
     icon: Shield,
-    label: "Fully clothed, always",
-    detail: "Jeans, skirts, shorts. No underwear, no nudity, ever.",
+    label: "Pants on, always",
+    detail: "Profile photos: a fully clothed behind. Posts: no nudity, ever.",
   },
   {
     icon: Users,

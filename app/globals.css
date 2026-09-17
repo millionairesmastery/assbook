@@ -2246,3 +2246,20 @@ button.stat:hover {
 .handle-status.is-no {
   color: #b3261e;
 }
+
+/* A feature that is on its way: looks like the buttons next to it, does nothing yet. */
+.coming-soon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9aa3ab;
+  cursor: help;
+}
+.coming-soon:focus-visible {
+  outline: 2px solid #c94120;
+  outline-offset: 2px;
+}

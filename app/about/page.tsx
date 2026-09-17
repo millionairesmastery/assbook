@@ -36,10 +36,10 @@ export default function AboutPage() {
       </p>
       <h2>How it is kept safe</h2>
       <p>
-        Every photo is checked automatically before it is stored. Nudity,
-        underwear and swimwear are rejected; a profile photo that is clearly not
-        a clothed behind is rejected; anything the check is unsure about waits
-        for a moderator. Members can report any post and block any account, and
+        Every photo is checked automatically before it is stored. Nudity and
+        sexual content are rejected everywhere; a profile photo that is not a
+        fully clothed behind (underwear and swimwear do not count) is rejected;
+        anything the check is unsure about waits for a moderator. Members can report any post and block any account, and
         every report is read by a person. Members must be 18 or older. The
         dress code is in the Community rules; the full picture is in the Terms
         and the Privacy notice.

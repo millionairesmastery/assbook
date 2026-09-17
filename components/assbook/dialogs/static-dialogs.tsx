@@ -25,8 +25,9 @@ export function RulesDialog({ onClose }: { onClose: () => void }) {
           <p>
             <b>1. Pants on. Always.</b>
             <br />
-            Profile photos show your own fully clothed behind. No underwear,
-            no swimwear, no nudity or sexual content, anywhere on Assbook.
+            Profile photos show your own fully clothed behind: no underwear,
+            no swimwear. Post photos can be beach days and everything else,
+            but no nudity or sexual content, anywhere on Assbook.
           </p>
           <p>
             <b>2. Your photo. Your permission.</b>
