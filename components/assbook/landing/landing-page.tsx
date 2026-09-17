@@ -144,7 +144,7 @@ export function LandingPage({
                 <img
                   src="/street-style-friends.png"
                   alt="Three friends photographed from behind in denim and street style."
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
                 />
                 <footer>128 likes · 12 replies</footer>

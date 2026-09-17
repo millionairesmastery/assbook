@@ -3229,3 +3229,86 @@ button.stat:hover {
     margin-left: auto;
   }
 }
+
+/* Phones: the landing scrolls. The first screen is the headline, one line,
+   the picture and the buttons. The words and the footer sit below the fold. */
+@media (max-width: 650px) {
+  .landing {
+    max-height: none;
+    overflow: visible;
+  }
+  :root:has(.landing) {
+    overflow: auto;
+  }
+  .landing-hero {
+    overflow: visible;
+    min-height: calc(100svh - 62px);
+    align-content: start;
+    gap: 14px;
+    padding: 20px 16px 28px;
+  }
+  /* The copy block dissolves so its pieces can be ordered around the art. */
+  .landing-copy {
+    display: contents;
+  }
+  .landing .eyebrow {
+    order: 1;
+    margin: 0;
+  }
+  .landing h1 {
+    order: 2;
+    font-size: clamp(38px, 11.5vw, 48px);
+    margin: 0;
+  }
+  .landing-tagline {
+    order: 3;
+    margin: 0;
+    font-size: 17px;
+  }
+  .landing-actions {
+    order: 4;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin: 4px 0 0;
+  }
+  .landing-actions .primary {
+    width: 100%;
+    min-height: 48px;
+  }
+  .landing-actions .text-link {
+    align-self: center;
+  }
+  .landing-art {
+    order: 5;
+    display: flex;
+    justify-content: center;
+    align-self: auto;
+    max-height: none;
+    overflow: visible;
+    margin: 8px 0 4px;
+  }
+  .landing-art .mini-profile {
+    display: none;
+  }
+  .landing-art .mini-phone {
+    width: min(300px, 88%);
+    max-height: none;
+  }
+  .landing-features {
+    order: 6;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    margin: 6px 0 0;
+  }
+  .landing-features li small {
+    display: none;
+  }
+  .landing-blurb {
+    order: 7;
+    margin: 6px 0 0;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+}
