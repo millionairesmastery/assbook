@@ -1616,67 +1616,103 @@ button.stat:hover {
 
 /* The new member nudge: a scrollable shortlist of people to follow, a live
    count, and a quiet way out that leaves onboarding for next time. */
-.onboard-list {
+.onboard-dialog {
+  max-width: 440px;
+}
+.onboard-stack {
+  min-width: 0;
+}
+.onboard-search {
   display: flex;
-  flex-direction: column;
-  max-height: 44svh;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid #e3e7ec;
+  border-radius: 10px;
+  background: #f7f8fa;
+  color: #6b7681;
+}
+.onboard-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 10px 0;
+  font-size: 14px;
+  outline: none;
+}
+.onboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 42svh;
   overflow-y: auto;
-  margin: 0 -4px;
-  padding: 0 4px;
+  overflow-x: hidden;
 }
-.onboard-person {
+.onboard-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
   border-bottom: 1px solid #f1f3f6;
+  min-width: 0;
 }
-.onboard-person:last-child {
+.onboard-row:last-child {
   border-bottom: 0;
 }
-.onboard-person .person {
-  margin: 12px 0 0;
+.onboard-row .avatar {
+  width: 32px;
+  height: 32px;
 }
-.onboard-bio {
-  font-size: 12px;
-  line-height: 1.5;
-  color: #5f6b75;
-  margin: 3px 0 12px 46px;
+.onboard-who {
+  min-width: 0;
+  font-size: 14px;
+}
+.onboard-who .name-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.onboard-who .name-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.onboard-person:not(:has(.onboard-bio)) .person {
-  margin-bottom: 12px;
+.onboard-meta {
+  display: block;
+  font-size: 12px;
+  color: #5f6b75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* The dialog has room for words even when the rail does not, and "Follow" or
-   "Following" in full is the whole point of this screen. */
-.onboard-list .follow-button span {
+/* "Follow" in full: the dialog has room for the word. */
+.onboard-row .follow-button span {
   display: inline;
+}
+.onboard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+.onboard-footer .primary {
+  margin-left: auto;
 }
 .onboard-progress {
   font-size: 13px;
   font-weight: 600;
   color: #5f6b75;
-}
-.onboard-skip {
-  align-self: center;
-  background: none;
-  border: 0;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #6b7681;
-  padding: 8px 12px;
-  margin-top: -8px;
-}
-.onboard-skip:hover {
-  color: #c94120;
-  background: #fff0e8;
+  margin: 0;
 }
 @media (max-width: 650px) {
   .onboard-list {
-    max-height: 40svh;
+    max-height: 38svh;
   }
-  .onboard-list .follow-button {
-    min-height: 44px;
-  }
-  .onboard-skip {
+  .onboard-row .follow-button {
     min-height: 44px;
   }
 }

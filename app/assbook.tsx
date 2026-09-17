@@ -788,9 +788,9 @@ export default function Assbook() {
       )}
       {showOnboarding && (
         <FollowOnboardingDialog
+          selfId={user.id}
           onFollowed={syncFollow}
           onDone={finishOnboarding}
-          onSkip={() => setOnboardingClosed(true)}
         />
       )}
       {confirmation && (

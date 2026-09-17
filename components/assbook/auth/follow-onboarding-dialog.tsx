@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -9,7 +9,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FollowButton, PersonRow } from "@/components/assbook/people/person-row";
+import { Avatar } from "@/components/assbook/avatar";
+import { OfficialBadge } from "@/components/assbook/official-badge";
+import { FollowButton } from "@/components/assbook/people/person-row";
+import { usePersonSearch } from "@/hooks/use-person-search";
 import { api, errorMessage, isAbortError } from "@/lib/api-client";
 import type { Profile } from "@/lib/types";
 
@@ -19,21 +22,18 @@ const PROGRESS_ID = "onboarding-progress";
 
 /**
  * The one step every new member goes through: follow a few people, so the
- * Following feed has something in it. The list owns its own follow state and
- * reports every change to the page, the way the follow list dialog does.
- *
- * While the quota is unmet the dialog ignores Escape and clicks outside, so
- * the only ways out are finishing or the quiet "Skip for now" button. Skipping
- * leaves onboarding undone, and the dialog comes back on the next visit.
+ * Following feed has something in it. Suggestions come first; the search box
+ * finds anyone else. There is no way out except following enough people,
+ * which the server checks again before it marks the member as done.
  */
 export function FollowOnboardingDialog({
+  selfId,
   onFollowed,
   onDone,
-  onSkip,
 }: {
+  selfId: string;
   onFollowed: (person: Profile, following: number) => void;
   onDone: () => void;
-  onSkip: () => void;
 }) {
   const [people, setPeople] = useState<Profile[]>([]);
   const [required, setRequired] = useState(0);
@@ -46,6 +46,11 @@ export function FollowOnboardingDialog({
   const [attempt, setAttempt] = useState(0);
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
   const [finishing, setFinishing] = useState(false);
+  const [term, setTerm] = useState("");
+  // Follow state decided in this dialog, so a person looks the same whether
+  // they came from the suggestions or from a search.
+  const [decided, setDecided] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const search = usePersonSearch(term);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,40 +73,29 @@ export function FollowOnboardingDialog({
 
   const followed = already + picked;
   const enough = followed >= required;
-  // Nothing loaded yet means nothing is known about the quota, so hold the
-  // door shut until the answer arrives.
-  const locked = !loaded || (required > 0 && !enough);
 
-  const patch = useCallback((id: string, following: number) => {
-    setPeople((current) =>
-      current.map((person) =>
-        person.id === id
-          ? {
-              ...person,
-              following,
-              followers: Math.max(
-                0,
-                (person.followers ?? 0) + (following ? 1 : -1),
-              ),
-            }
-          : person,
-      ),
-    );
-  }, []);
+  const withState = useCallback(
+    (person: Profile): Profile => {
+      const following = decided.get(person.id);
+      return following === undefined ? person : { ...person, following };
+    },
+    [decided],
+  );
 
   const follow = useCallback(
-    async (person: Profile) => {
+    async (raw: Profile) => {
+      const person = withState(raw);
       if (pending.has(person.id)) return;
       const next = person.following ? 0 : 1;
       const step = next ? 1 : -1;
-      patch(person.id, next);
+      setDecided((current) => new Map(current).set(person.id, next));
       setPicked((n) => n + step);
       setPending((current) => new Set(current).add(person.id));
       try {
         await api("follow/" + person.id, { method: next ? "PUT" : "DELETE" });
         onFollowed(person, next);
       } catch (cause) {
-        patch(person.id, next ? 0 : 1);
+        setDecided((current) => new Map(current).set(person.id, next ? 0 : 1));
         setPicked((n) => n - step);
         toast.error(errorMessage(cause));
       } finally {
@@ -112,7 +106,7 @@ export function FollowOnboardingDialog({
         });
       }
     },
-    [onFollowed, patch, pending],
+    [onFollowed, pending, withState],
   );
 
   // The server checks the count again, so a stale screen cannot sneak past it.
@@ -128,27 +122,41 @@ export function FollowOnboardingDialog({
     }
   }, [finishing, onDone]);
 
+  const searching = term.trim().length > 0;
+  // A search can turn up the member themselves; nobody needs to follow that.
+  const shown = (searching ? search.people : people)
+    .filter((person) => person.id !== selfId)
+    .map(withState);
   const description =
     required > 0
-      ? "Pick at least " +
-        required +
-        " to fill your Following feed. The Assbook crew is a good start."
+      ? "Pick at least " + required + " to fill your Following feed. The Assbook crew is a good start."
       : "A Following feed is a lot more fun with company in it.";
 
   return (
     <Dialog
       open
-      onOpenChange={(open) => {
-        if (open || locked || finishing) return;
-        onSkip();
+      onOpenChange={() => {
+        // Following enough people is the only way through.
       }}
     >
-      <DialogContent className="assbook-dialog" showCloseButton={false}>
+      <DialogContent className="assbook-dialog onboard-dialog" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Follow a few backsides.</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <div className="form-stack">
+        <div className="form-stack onboard-stack">
+          <label className="onboard-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              value={term}
+              onChange={(event) => setTerm(event.target.value)}
+              placeholder="Find someone by name or handle"
+              aria-label="Find people to follow"
+              autoComplete="off"
+              maxLength={40}
+            />
+          </label>
           {error ? (
             <div className="form-error" role="alert">
               <p>{error}</p>
@@ -165,58 +173,62 @@ export function FollowOnboardingDialog({
               </button>
             </div>
           ) : !loaded ? (
-            <p className="muted" role="status">
-              <Loader2 className="spin" size={18} aria-hidden="true" /> Rounding
-              up the good ones…
+            <p className="muted small" role="status">
+              <Loader2 className="spin" size={16} aria-hidden="true" /> Rounding up the good ones…
             </p>
-          ) : people.length === 0 ? (
-            <p className="muted">
-              Nobody to follow yet. You are early. Come back soon.
+          ) : shown.length === 0 ? (
+            <p className="muted small">
+              {searching
+                ? search.searched
+                  ? "No one by that name yet."
+                  : "Looking…"
+                : "Nobody to follow yet. You are early. Come back soon."}
             </p>
           ) : (
-            <div className="onboard-list">
-              {people.map((person) => (
-                <div className="onboard-person" key={person.id}>
-                  <PersonRow
+            <ul className="onboard-list" aria-label={searching ? "Search results" : "Suggested people"}>
+              {shown.map((person) => (
+                <li className="onboard-row" key={person.id}>
+                  <Avatar person={person} />
+                  <div className="onboard-who">
+                    <b className="name-line">
+                      <span className="name-text">{person.name}</span>
+                      {person.official === 1 && <OfficialBadge />}
+                    </b>
+                    <span className="onboard-meta">
+                      @{person.handle}
+                      {person.bio ? " · " + person.bio : ""}
+                    </span>
+                  </div>
+                  <FollowButton
                     person={person}
-                    action={
-                      <FollowButton
-                        person={person}
-                        pending={pending.has(person.id)}
-                        onFollow={(target) => void follow(target)}
-                      />
-                    }
+                    pending={pending.has(person.id)}
+                    onFollow={(target) => void follow(target)}
                   />
-                  {person.bio && <p className="onboard-bio">{person.bio}</p>}
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-          {!error && loaded && required > 0 && (
-            <p className="onboard-progress" id={PROGRESS_ID} role="status">
-              {followed} of {required} followed
-            </p>
-          )}
-          <button
-            className="primary"
-            onClick={() => void finish()}
-            disabled={!loaded || !!error || !enough || finishing}
-            aria-describedby={
-              loaded && !error && required > 0 ? PROGRESS_ID : undefined
-            }
-          >
-            {finishing ? (
-              <>
-                <Loader2 className="spin" size={16} aria-hidden="true" /> Off we
-                go…
-              </>
-            ) : (
-              <>Let&rsquo;s go</>
+          <div className="onboard-footer">
+            {!error && loaded && required > 0 && (
+              <p className="onboard-progress" id={PROGRESS_ID} role="status">
+                {followed} of {required} followed
+              </p>
             )}
-          </button>
-          <button className="onboard-skip" onClick={onSkip}>
-            Skip for now
-          </button>
+            <button
+              className="primary"
+              onClick={() => void finish()}
+              disabled={!loaded || !!error || !enough || finishing}
+              aria-describedby={loaded && !error && required > 0 ? PROGRESS_ID : undefined}
+            >
+              {finishing ? (
+                <>
+                  <Loader2 className="spin" size={16} aria-hidden="true" /> Off we go…
+                </>
+              ) : (
+                <>Let&rsquo;s go</>
+              )}
+            </button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
