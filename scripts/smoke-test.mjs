@@ -313,8 +313,8 @@ try {
     const followingPin = (await req(b, "feed?filter=following")).posts;
     assert.equal(followingPin[0]?.id, welcome.id, "Pinned post tops the Following tab for a newcomer");
     assert.equal(followingPin.filter((x) => x.id === welcome.id).length, 1);
-    // A member past their first week sees the pinned post in its normal place.
-    sqlLocal("UPDATE users SET created=" + (Date.now() - 8 * 86400000) + " WHERE handle='" + handles[0] + "'");
+    // A member past their first day sees the pinned post in its normal place.
+    sqlLocal("UPDATE users SET created=" + (Date.now() - 2 * 86400000) + " WHERE handle='" + handles[0] + "'");
     const settled = (await req(a, "feed")).posts;
     assert.equal(settled[0]?.id, later.id, "Settled members see the timeline order");
     assert.ok(settled.some((x) => x.id === welcome.id), "The pinned post is still in the feed");

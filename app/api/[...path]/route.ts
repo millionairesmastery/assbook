@@ -86,9 +86,9 @@ async function handle(req: Request) {
       const single = url.searchParams.get("post");
       // Pinned posts are the welcome for newcomers: on page one of the
       // Everyone and Following tabs they come first for visitors and for
-      // members in their first week, whoever they follow. After that they
+      // members in their first day, whoever they follow. After that they
       // sit in the timeline like any other post.
-      const newcomer = !me || me.created > Date.now() - 7 * 86400000;
+      const newcomer = !me || me.created > Date.now() - 86400000;
       const mainFeed =
         newcomer && ["everyone", "following"].includes(filter) && !q && !profile && !single;
       if (mainFeed) clauses.push("p.pinned=0");
