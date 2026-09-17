@@ -2634,6 +2634,36 @@ button.stat:hover {
   gap: 10px;
   margin-top: 10px;
 }
+/* The front camera shows as a mirror, the way phones do it. The recording
+   and the still are taken from the stream itself and stay the right way round. */
+.peek-camera-view.mirrored {
+  transform: scaleX(-1);
+}
+/* Front or back, on the picture itself, where a camera app keeps it. */
+.peek-flip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.peek-flip:hover,
+.peek-flip:focus-visible {
+  background: rgba(255, 255, 255, 0.4);
+  outline: none;
+}
+.peek-flip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .peek-again {
   align-self: flex-start;
 }

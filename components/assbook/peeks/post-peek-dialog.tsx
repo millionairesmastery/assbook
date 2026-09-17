@@ -157,6 +157,9 @@ export function PostPeekDialog({
   const [clip, setClip] = useState<Clip | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
+  // How many cameras the device owns. Unknown until the first one is open,
+  // because labels and counts only come through once permission is granted.
+  const [cameras, setCameras] = useState(0);
   const [recording, setRecording] = useState(false);
   const [left, setLeft] = useState(CLIP_MS / 1000);
   const [caption, setCaption] = useState("");
@@ -199,6 +202,12 @@ export function PostPeekDialog({
     if (opening) return;
     setError("");
     setOpening(true);
+    // Phones allow one live camera at a time, so the current one goes off
+    // before the other is asked for.
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+      setStream(null);
+    }
     try {
       const next = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -210,6 +219,12 @@ export function PostPeekDialog({
       });
       setFacing(mode);
       setStream(next);
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setCameras(devices.filter((d) => d.kind === "videoinput").length);
+      } catch {
+        setCameras(0);
+      }
     } catch {
       setError(
         "Assbook could not reach your camera. Check the permission and try again, or choose a clip instead.",
@@ -411,12 +426,36 @@ export function PostPeekDialog({
             <div className="peek-camera">
               <video
                 ref={preview}
-                className="peek-camera-view"
+                className={
+                  "peek-camera-view" + (facing === "user" ? " mirrored" : "")
+                }
                 muted
                 playsInline
                 autoPlay
                 aria-label="Camera preview"
               />
+              {cameras !== 1 && (
+                <button
+                  type="button"
+                  className="peek-flip"
+                  disabled={recording || opening}
+                  onClick={() =>
+                    void openCamera(facing === "environment" ? "user" : "environment")
+                  }
+                  aria-label={
+                    facing === "environment"
+                      ? "Switch to the front camera"
+                      : "Switch to the back camera"
+                  }
+                  title="Switch camera"
+                >
+                  {opening ? (
+                    <Loader2 className="spin" size={20} aria-hidden="true" />
+                  ) : (
+                    <SwitchCamera size={20} aria-hidden="true" />
+                  )}
+                </button>
+              )}
               {recording && (
                 <span className="peek-countdown" aria-hidden="true">
                   <svg viewBox="0 0 48 48">
@@ -442,17 +481,6 @@ export function PostPeekDialog({
                   onClick={recording ? stopRecording : record}
                 >
                   {recording ? "Stop" : "Record 5 seconds"}
-                </button>
-                <button
-                  className="quiet"
-                  disabled={recording || opening}
-                  onClick={() =>
-                    void openCamera(facing === "environment" ? "user" : "environment")
-                  }
-                  aria-label="Switch camera"
-                >
-                  <SwitchCamera size={18} aria-hidden="true" />
-                  Flip
                 </button>
                 <button
                   className="quiet"
