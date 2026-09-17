@@ -23,19 +23,40 @@ const RULES =
   '{"description": one factual sentence about what the image shows, ' +
   '"people": number of people visible (0 if none), ' +
   '"view": "behind" if the main subject is a person seen from behind, "front" if seen from the front or side, "none" if no person, ' +
-  '"clothing": "clothed" if every visible person is fully clothed, "revealing" if underwear, swimwear or partial exposure, "nude" if genitals, bare buttocks or nipples are exposed, "none" if no person, ' +
+  '"clothing": "clothed" only if the buttocks, genitals and chest of every visible person are covered by normal clothing such as trousers, jeans, a skirt, a dress or shorts; "revealing" if underwear, lingerie, swimwear, a towel, or partly exposed buttocks; "nude" if buttocks skin, genitals or nipples are visible, even partly, even from far away; "none" if no person, ' +
+  '"lower_body": the exact garment covering the buttocks of the main person, such as "blue jeans", "black skirt", "swim trunks", "underwear", or "nothing" if the buttocks are bare, or "no person", ' +
+  '"upper_body": the garment on the upper body, or "nothing" if bare, or "no person", ' +
+  '"buttocks_bare": true if any buttocks skin is visible, otherwise false, ' +
+  '"underwear_only": true if the lower body is covered only by underwear, lingerie or swimwear, otherwise false, ' +
   '"sexual": true if there is sexual activity or an explicitly sexual pose, otherwise false, ' +
   '"confidence": "high" if the image is clear and you are sure, otherwise "low"}. ' +
-  "Be literal. A plain colour, a drawing, an object or a landscape has 0 people, view none and clothing none.";
+  "Be literal and strict: when in doubt between clothed and revealing choose revealing, and between revealing and nude choose nude. " +
+  "A plain colour, a drawing, an object or a landscape has 0 people, view none and clothing none.";
+// Garments that count as clothed for the dress code.
+const CLOTHED_WORDS =
+  /\b(jeans|trousers|pants|slacks|chinos|skirt|dress|shorts|leggings|joggers|sweatpants|tracksuit|overalls|dungarees|kilt|uniform|suit|khakis|corduroys|culottes|capris|jumpsuit|romper|gown|robe|coat|tights)\b/i;
+// Garments or words that mean bare skin or nothing but underwear or swimwear.
+const BARE_WORDS =
+  /\b(nothing|none|bare|naked|nude|skin|underwear|panties|briefs|boxers|thong|g-string|lingerie|bikini|swimsuit|swimwear|swim trunks|trunks|speedo|towel)\b/i;
+// Words in the model's own description that contradict a "clothed" verdict.
+const SKIN_WORDS =
+  /\b(nude|naked|nudity|bare (buttocks|bottom|butt|skin)|buttocks|genital|topless|shirtless|underwear|lingerie|thong|bikini|swimsuit|swimwear|towel|undressed|unclothed|no clothes|without clothes)\b/i;
 
 type Answer = {
   description?: string;
   people?: number | string;
   view?: string;
   clothing?: string;
+  lower_body?: string;
+  upper_body?: string;
+  buttocks_bare?: boolean | string;
+  underwear_only?: boolean | string;
   sexual?: boolean | string;
   confidence?: string;
 };
+function flag(value: unknown) {
+  return value === true || String(value).toLowerCase() === "true";
+}
 
 type AiBinding = { run(model: string, input: unknown): Promise<unknown> };
 
@@ -123,19 +144,34 @@ function decide(answer: Answer | null, target: PhotoTarget): PhotoVerdict {
   const people = Number(answer.people) || 0;
   const clothing = String(answer.clothing ?? "").toLowerCase();
   const view = String(answer.view ?? "").toLowerCase();
-  const sexual = answer.sexual === true || String(answer.sexual).toLowerCase() === "true";
-  const seen = answer.description ? " The check saw: " + String(answer.description).slice(0, 140) : "";
-  if (clothing === "nude" || sexual)
+  const description = String(answer.description ?? "");
+  const lower = String(answer.lower_body ?? "").toLowerCase();
+  const sexual = flag(answer.sexual);
+  // The garment words are more truthful than the booleans, so they decide.
+  const lowerBare = people > 0 && (lower === "" || (BARE_WORDS.test(lower) && !CLOTHED_WORDS.test(lower)));
+  const lowerNude = people > 0 && /\b(nothing|none|bare|naked|nude|skin)\b/i.test(lower) && !CLOTHED_WORDS.test(lower);
+  const bare = flag(answer.buttocks_bare) || lowerNude;
+  const underwear = flag(answer.underwear_only) || lowerBare;
+  const seen = description ? " The check saw: " + description.slice(0, 140) : "";
+  if (clothing === "nude" || sexual || bare)
     return {
       verdict: sure ? "reject" : "unsure",
       reason: sure
         ? "This looks like it shows nudity or sexual content, which is not allowed here."
         : "The automatic check thought this might show nudity." + seen,
     };
-  if (clothing === "revealing")
-    return { verdict: "unsure", reason: "The automatic check saw revealing clothing." + seen };
+  // Underwear, swimwear, or a description that mentions skin: never a clean
+  // pass. Profile photos get rejected outright, post photos wait for review.
+  if (clothing === "revealing" || underwear || SKIN_WORDS.test(description))
+    return target === "avatar" && sure && (clothing === "revealing" || underwear)
+      ? {
+          verdict: "reject",
+          reason: "A profile photo has to be your own fully clothed behind. Underwear and swimwear do not count.",
+        }
+      : { verdict: "unsure", reason: "The automatic check saw revealing clothing or bare skin." + seen };
   if (target === "avatar") {
-    const behind = people > 0 && view === "behind" && clothing === "clothed";
+    const behind =
+      people > 0 && view === "behind" && clothing === "clothed" && CLOTHED_WORDS.test(lower);
     if (behind && sure) return { verdict: "allow", reason: "" };
     if (sure && (people === 0 || view === "front"))
       return {
@@ -196,7 +232,17 @@ export async function checkPhoto(
           sample: JSON.stringify(result).slice(0, 300),
         }),
       );
-    return decide(answer, target);
+    const verdict = decide(answer, target);
+    console.log(
+      JSON.stringify({
+        event: "photo_check",
+        model: choice,
+        target,
+        verdict: verdict.verdict,
+        answer: answer ? JSON.stringify(answer).slice(0, 400) : null,
+      }),
+    );
+    return verdict;
   } catch (e) {
     // The photo still gets in, but a moderator sees it. Never block uploads on
     // the model being slow or down.
