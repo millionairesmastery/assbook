@@ -18,6 +18,7 @@ import {
   type FollowListMode,
 } from "@/components/assbook/people/follow-list-dialog";
 import { BlockedDialog } from "@/components/assbook/people/blocked-dialog";
+import { NotificationsDialog } from "@/components/assbook/notifications/notifications-dialog";
 import { TopPostsCard } from "@/components/assbook/feed/top-posts-card";
 import { AuthDialog } from "@/components/assbook/auth/auth-dialog";
 import { AccountSecurityDialog } from "@/components/assbook/auth/account-security-dialog";
@@ -52,6 +53,7 @@ import {
 } from "@/components/assbook/nav-items";
 import { useAsyncAction } from "@/hooks/use-async-action";
 import { useFeed } from "@/hooks/use-feed";
+import { useNotifications } from "@/hooks/use-notifications";
 import { useNow } from "@/hooks/use-now";
 import { usePeeks } from "@/hooks/use-peeks";
 import { usePeople } from "@/hooks/use-people";
@@ -60,7 +62,7 @@ import { useProfile } from "@/hooks/use-profile";
 import { useTopPosts } from "@/hooks/use-top";
 import { useViewer } from "@/hooks/use-viewer";
 import { api, errorMessage } from "@/lib/api-client";
-import type { Post, Profile } from "@/lib/types";
+import type { Notification, Post, Profile } from "@/lib/types";
 
 const RECOVERY_MODES = ["recover", "reset"];
 const FEED_TAB_KEY = "assbook:feed-tab";
@@ -100,6 +102,7 @@ export default function Assbook({
   const viewerId = user?.id ?? "";
   const now = useNow();
   const action = useAsyncAction();
+  const notifications = useNotifications(!!user);
 
   // Where you are standing: the feed, the community or a profile. The tabs
   // inside the feed and the profile have their own state, so switching a tab
@@ -615,6 +618,36 @@ export default function Assbook({
     [loadPeeks, peekPeople, requireUser],
   );
 
+  // A tap on a notification lands where it happened: the post, the peek, or
+  // the person. Gone things say so instead of opening an empty screen.
+  const openNotification = useCallback(
+    (item: Notification) => {
+      setModal("");
+      if (item.kind === "follow") {
+        if (item.actor) visitProfile(item.actor.handle);
+        return;
+      }
+      if (item.post_id) {
+        if (!item.post_live) {
+          toast("That post is gone.");
+          return;
+        }
+        openPost(item.post_id);
+        return;
+      }
+      if (item.peek_id) {
+        if (!item.peek_live || !item.peek_user_id) {
+          toast("That peek has gone. Peeks last a day.");
+          return;
+        }
+        openPeeks(item.peek_user_id);
+        return;
+      }
+      if (item.actor) visitProfile(item.actor.handle);
+    },
+    [openPeeks, openPost, visitProfile],
+  );
+
   const openPostPeek = useCallback(() => {
     if (!requireUser()) return;
     setModal("post-peek");
@@ -865,6 +898,14 @@ export default function Assbook({
           onClose={() => setFollowList("")}
         />
       )}
+      {modal === "notifications" && user && (
+        <NotificationsDialog
+          now={now}
+          onLoaded={notifications.markRead}
+          onOpen={openNotification}
+          onClose={closeModal}
+        />
+      )}
       {modal === "blocked" && (
         <BlockedDialog
           onUnblocked={() => {
@@ -928,6 +969,8 @@ export default function Assbook({
         onOpenSecurity={() => setModal("security")}
         onOpenBlocked={() => setModal("blocked")}
         onOpenModeration={() => setModal("moderation")}
+        unread={notifications.unread}
+        onOpenNotifications={() => setModal("notifications")}
         onSignOut={signOut}
         onJoin={() => {
           setAuthMode("signup");

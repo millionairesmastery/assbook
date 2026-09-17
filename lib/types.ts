@@ -111,3 +111,34 @@ export type PeekReply = {
   name: string;
   avatar: string | null;
 };
+
+export type NotificationKind =
+  | "follow"
+  | "like"
+  | "comment"
+  | "peek_like"
+  | "peek_reply"
+  | "repeek"
+  | "note";
+export type NotificationActor = {
+  id: string;
+  handle: string;
+  name: string;
+  avatar: string | null;
+  verified: "user" | "business" | null;
+  official: number;
+};
+export type Notification = {
+  id: string;
+  kind: NotificationKind;
+  post_id: string;
+  peek_id: string;
+  body: string;
+  created: number;
+  read: boolean;
+  post_live: boolean;
+  peek_live: boolean;
+  peek_user_id: string;
+  /** Null for a note from the Assbook crew. */
+  actor: NotificationActor | null;
+};

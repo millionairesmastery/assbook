@@ -2945,3 +2945,103 @@ button.stat:hover {
     font-size: 16px !important;
   }
 }
+
+/* The bell: in the top bar next to your name, with the unread count on it. */
+.bell-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #1c2328;
+  background: #f3f4f6;
+  cursor: pointer;
+  flex: none;
+}
+.bell-button:hover,
+.bell-button:focus-visible {
+  background: #e9ebef;
+  outline: none;
+}
+.bell-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ed532d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #fff;
+}
+.notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 60svh;
+  overflow-y: auto;
+}
+.notice-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.notice-row:hover,
+.notice-row:focus-visible {
+  background: #f7f8fa;
+  outline: none;
+}
+.notice-row.unread {
+  background: #fff5f0;
+}
+.notice-row.unread:hover {
+  background: #ffede4;
+}
+.notice-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #1c2328;
+}
+.notice-text b {
+  font-weight: 700;
+}
+.notice-text q {
+  color: #626d77;
+  quotes: "\201C" "\201D";
+}
+.notice-when {
+  font-size: 12px;
+  color: #8a95a0;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.notice-crew {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff1eb;
+  font-size: 20px;
+  flex: none;
+}

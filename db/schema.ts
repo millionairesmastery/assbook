@@ -272,3 +272,32 @@ export const peekShares = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.peekId, t.userId] }), index("peek_shares_user").on(t.userId, t.created)],
 );
+
+// One row per thing that happened to a member: a follow, a like, a reply, a
+// re-peek, or a note from the Assbook crew. Written when the event happens,
+// read from the bell. The unique key keeps an unlike-relike from writing twice.
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: text().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Who did it; empty for a note from the crew.
+    actorId: text("actor_id").references(() => users.id, { onDelete: "cascade" }),
+    kind: text().notNull(),
+    // Empty rather than null, so the unique key below can see them.
+    postId: text("post_id").notNull().default(""),
+    peekId: text("peek_id").notNull().default(""),
+    // The reply or comment this is about; empty for a like or a follow.
+    ref: text().notNull().default(""),
+    // The words of a note, or a snippet of the reply.
+    body: text().notNull().default(""),
+    created: integer().notNull(),
+    readAt: integer("read_at"),
+  },
+  (t) => [
+    index("notifications_user").on(t.userId, t.created),
+    uniqueIndex("notifications_once").on(t.userId, t.actorId, t.kind, t.postId, t.peekId, t.ref),
+  ],
+);

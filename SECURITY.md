@@ -76,6 +76,7 @@ the generic response. Logs include a failure event without recipient or token.
   metadata (EXIF, including location, is served as uploaded).
 - The moderator can view any stored photo, including unpublished ones, to
   review the queue. Moderator actions on photos are logged.
+- Notifications only ever tell a member about actions on their own posts, peeks and profile, by people who are not blocked either way, and are only readable by that member.
 - Peek clips are stored as uploaded (MP4 or WebM, up to 16 MB) and are not
   scanned frame by frame; the one frame the browser submits is checked like
   a post photo and is what the moderator sees. Clips are served only to

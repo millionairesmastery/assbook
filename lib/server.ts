@@ -278,6 +278,9 @@ export async function housekeeping() {
   // Expired peeks lose their clip; the record stays.
   const { purgePeekFiles } = await import("./peeks");
   await purgePeekFiles();
+  // Old notifications go after two months; nobody scrolls that far back.
+  const { purgeOldNotifications } = await import("./notifications");
+  await purgeOldNotifications();
 }
 // Removes a photo from R2 and the uploads table if nothing references it.
 export async function deleteUnusedUpload(id: string) {

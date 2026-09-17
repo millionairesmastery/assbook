@@ -33,6 +33,12 @@ photo is your own fully clothed behind. No face recognition. Just hindsight.
 - Local email simulation requires no service credentials. Live delivery uses
   Cloudflare Email Sending and requires sender-domain setup.
 
+Notifications live behind the bell in the top bar: a follow, a like or a reply
+on a post or a peek, a re-peek, and notes from the crew when a photo has been
+reviewed. They are written when the event happens and kept for two months.
+The count is polled once a minute while the app is open; opening the list
+marks everything read. Nothing is emailed or pushed.
+
 Demo profiles and posts are optional and clearly labeled. They cannot sign in.
 
 ## Stack

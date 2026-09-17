@@ -1,5 +1,6 @@
 import { authRoute, handleAvailability } from "@/lib/auth";
 import { peeksRoute, removePeeksWithFrame } from "@/lib/peeks";
+import { notificationsRoute, notify } from "@/lib/notifications";
 import { checkPhoto, type PhotoTarget } from "@/lib/moderation";
 import {
   db,
@@ -69,6 +70,10 @@ async function handle(req: Request) {
     if (path[0] === "me" && method === "GET") return json({ user: me });
     const authResponse = await authRoute(req, url.pathname.slice(5));
     if (authResponse) return authResponse;
+    if (path[0] === "notifications") {
+      const me = await requireUser(req);
+      return await notificationsRoute(path, method, me.id);
+    }
     if (path[0] === "peeks" || path[0] === "peek-upload") {
       if (path[0] === "peeks" && !path[1] && method === "GET")
         url.searchParams.set("official", adminHandle());
@@ -500,9 +505,9 @@ async function handle(req: Request) {
       ["like", "save"].includes(path[0]) &&
       ["PUT", "DELETE"].includes(method)
     ) {
-      await visiblePost(uuid(path[1]), user.id);
+      const liked = await visiblePost(uuid(path[1]), user.id);
       const table = path[0] === "like" ? "likes" : "bookmarks";
-      await db()
+      const written = await db()
         .prepare(
           method === "PUT"
             ? "INSERT OR IGNORE INTO " + table + "(user_id,post_id) VALUES(?,?)"
@@ -510,6 +515,8 @@ async function handle(req: Request) {
         )
         .bind(user.id, path[1])
         .run();
+      if (path[0] === "like" && method === "PUT" && written.meta.changes)
+        await notify({ to: liked.user_id, actor: user.id, kind: "like", postId: liked.id });
       return json({ ok: true });
     }
     if (
@@ -536,7 +543,7 @@ async function handle(req: Request) {
       )
         throw new HttpError(403, "This profile is unavailable.");
       const table = path[0] === "follow" ? "follows" : "blocks";
-      await db()
+      const written = await db()
         .prepare(
           method === "PUT"
             ? "INSERT OR IGNORE INTO " +
@@ -546,6 +553,8 @@ async function handle(req: Request) {
         )
         .bind(user.id, target)
         .run();
+      if (path[0] === "follow" && method === "PUT" && written.meta.changes)
+        await notify({ to: target, actor: user.id, kind: "follow" });
       if (path[0] === "block" && method === "PUT")
         await db()
           .prepare(
@@ -567,20 +576,24 @@ async function handle(req: Request) {
         ).results,
       });
     if (path[0] === "comments" && method === "POST") {
-      await visiblePost(uuid(path[1]), user.id);
+      const target = await visiblePost(uuid(path[1]), user.id);
       const d = await body(req);
+      const commentId = crypto.randomUUID();
+      const words = str(d.body, 280, 1);
       await db()
         .prepare(
           "INSERT INTO comments(id,post_id,user_id,body,created) VALUES(?,?,?,?,?)",
         )
-        .bind(
-          crypto.randomUUID(),
-          path[1],
-          user.id,
-          str(d.body, 280, 1),
-          Date.now(),
-        )
+        .bind(commentId, path[1], user.id, words, Date.now())
         .run();
+      await notify({
+        to: target.user_id,
+        actor: user.id,
+        kind: "comment",
+        postId: target.id,
+        ref: commentId,
+        body: words,
+      });
       return json({ ok: true }, 201);
     }
     if (path[0] === "comments" && method === "DELETE") {
@@ -662,11 +675,17 @@ async function handle(req: Request) {
         const link = "/api/photo/" + id;
         if (method === "POST" && path[3] === "approve") {
           const result = await db()
-            .prepare("UPDATE uploads SET flagged=0,flag_reason=NULL WHERE id=? AND flagged=1")
+            .prepare("UPDATE uploads SET flagged=0,flag_reason=NULL WHERE id=? AND flagged=1 RETURNING user_id")
             .bind(id)
-            .run();
-          if (!result.meta.changes) throw new HttpError(404, "Photo not found.");
+            .first<{ user_id: string }>();
+          if (!result) throw new HttpError(404, "Photo not found.");
           moderation("approve_photo", user.id, id);
+          await notify({
+            to: result.user_id,
+            kind: "note",
+            ref: id,
+            body: "A moderator looked at your photo and kept it. Thanks for keeping it classy.",
+          });
           return json({ ok: true });
         }
         if (method === "DELETE") {
@@ -687,6 +706,12 @@ async function handle(req: Request) {
           await bucket().delete(id);
           await removePeeksWithFrame(link);
           moderation("remove_photo", user.id, id);
+          await notify({
+            to: owner.user_id,
+            kind: "note",
+            ref: id,
+            body: "A moderator removed one of your photos for breaking the dress code. Fully clothed, seen from behind, and it stays.",
+          });
           return json({ ok: true });
         }
         throw new HttpError(404, "Not found.");

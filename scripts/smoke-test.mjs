@@ -383,6 +383,25 @@ try {
   assert.equal((await req(b, "peeks")).people[0].watched, true, "Watched peeks sort last and count as seen");
   const peekReplies = (await req(a, "peeks/" + peek.id + "/replies")).replies;
   assert.equal(peekReplies[0].body, "Nice behind you");
+  // Notifications: b's like and reply reached a; a's own actions did not.
+  await req(anon, "notifications", "GET", undefined, 401);
+  const inbox = await req(a, "notifications");
+  assert.ok(inbox.unread >= 2, "Unread count is up");
+  const peekLike = inbox.items.find((n) => n.kind === "peek_like");
+  assert.equal(peekLike.actor.handle, handles[1], "The peek like names who did it");
+  assert.equal(peekLike.peek_id, peek.id);
+  assert.equal(peekLike.peek_live, true);
+  assert.equal(peekLike.read, false);
+  const peekReply = inbox.items.find((n) => n.kind === "peek_reply");
+  assert.equal(peekReply.body, "Nice behind you", "The reply carries its words");
+  assert.ok(!inbox.items.some((n) => n.actor && n.actor.handle === handles[0]), "Nobody is told about themselves");
+  await req(b, "peeks/" + peek.id + "/like", "DELETE");
+  await req(b, "peeks/" + peek.id + "/like", "PUT");
+  assert.equal((await req(a, "notifications")).items.filter((n) => n.kind === "peek_like").length, 1, "Unlike and relike does not repeat");
+  await req(a, "notifications/read", "POST", {});
+  assert.equal((await req(a, "notifications/unread")).unread, 0, "Opening the list marks it read");
+  assert.equal((await req(a, "notifications")).items[0].read, true);
+  pass("Notifications: likes and replies reach the owner, never the actor, read once opened");
   await req(a, "peeks/" + peek.id + "/replies/" + peekReplies[0].id, "DELETE");
   // Re-peek: b shares a's clip; the entry sits in b's slot with a as creator,
   // a fresh viewer arriving through b credits both, nothing is re-uploaded.

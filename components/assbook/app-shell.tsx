@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Toaster } from "sonner";
-import { Check, Code2, LogOut, Pencil, Plus, Sparkles, Video } from "lucide-react";
+import { Bell, Check, Code2, LogOut, Pencil, Plus, Sparkles, Video } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +37,9 @@ export type AppShellProps = {
   onOpenSecurity: () => void;
   onOpenBlocked: () => void;
   onOpenModeration: () => void;
+  /** Unread notifications, shown on the bell. */
+  unread: number;
+  onOpenNotifications: () => void;
   onSignOut: () => void;
   onJoin: () => void;
   onSignIn: () => void;
@@ -63,6 +66,8 @@ export function AppShell({
   onOpenSecurity,
   onOpenBlocked,
   onOpenModeration,
+  unread,
+  onOpenNotifications,
   onSignOut,
   onJoin,
   onSignIn,
@@ -105,6 +110,23 @@ export function AppShell({
             onSelectPerson={onVisitProfile}
           />
           {user ? (
+            <>
+            <button
+              className="bell-button"
+              onClick={onOpenNotifications}
+              aria-label={
+                unread > 0
+                  ? "Notifications, " + unread + " unread"
+                  : "Notifications"
+              }
+            >
+              <Bell size={20} aria-hidden="true" />
+              {unread > 0 && (
+                <span className="bell-count" aria-hidden="true">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
+            </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="join-button">
@@ -136,6 +158,7 @@ export function AppShell({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </>
           ) : (
             <div className="top-auth">
               <button className="join-button" onClick={onJoin}>

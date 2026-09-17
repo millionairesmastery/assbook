@@ -1,3 +1,4 @@
+import { notify } from "./notifications";
 import {
   db,
   bucket,
@@ -334,13 +335,14 @@ export async function peeksRoute(
       )
       .bind(...(method === "PUT" ? [id, user.id, Date.now()] : [id, user.id]))
       .run();
+    if (method === "PUT") await notify({ to: row.user_id, actor: user.id, kind: "repeek", peekId: id });
     const count = await db().prepare("SELECT count(*) n FROM peek_shares WHERE peek_id=?").bind(id).first<{ n: number }>();
     return json({ ok: true, repeeks: count?.n ?? 0 });
   }
 
   if (path[0] === "peeks" && path[2] === "like" && ["PUT", "DELETE"].includes(method)) {
     const id = uuid(path[1]);
-    await liveOwner(id, user.id);
+    const row = await liveOwner(id, user.id);
     await db()
       .prepare(
         method === "PUT"
@@ -349,17 +351,21 @@ export async function peeksRoute(
       )
       .bind(id, user.id)
       .run();
+    if (method === "PUT") await notify({ to: row.user_id, actor: user.id, kind: "peek_like", peekId: id });
     return json({ ok: true });
   }
 
   if (path[0] === "peeks" && path[2] === "replies" && method === "POST") {
     const id = uuid(path[1]);
-    await liveOwner(id, user.id);
+    const row = await liveOwner(id, user.id);
     const d = await body(req);
+    const replyId = crypto.randomUUID();
+    const words = str(d.body, 280, 1);
     await db()
       .prepare("INSERT INTO peek_replies(id,peek_id,user_id,body,created) VALUES(?,?,?,?,?)")
-      .bind(crypto.randomUUID(), id, user.id, str(d.body, 280, 1), Date.now())
+      .bind(replyId, id, user.id, words, Date.now())
       .run();
+    await notify({ to: row.user_id, actor: user.id, kind: "peek_reply", peekId: id, ref: replyId, body: words });
     return json({ ok: true }, 201);
   }
 
