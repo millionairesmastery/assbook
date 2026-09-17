@@ -469,9 +469,10 @@ export default function Assbook({
     setOnboardingClosed(true);
     refreshViewer();
     revalidatePeople();
-    // Switching the tab loads the Following feed on its own.
-    chooseFeedTab("following");
-    toast.success("Your Following feed is filling up.");
+    // New members land on Everyone, where the pinned welcome post sits at the
+    // top. The Following tab is one tap away with the people they picked.
+    chooseFeedTab("everyone");
+    toast.success("You are in. Following shows the people you picked.");
   }, [chooseFeedTab, refreshViewer, revalidatePeople]);
 
   const submitPost = useCallback(() => {

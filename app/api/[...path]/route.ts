@@ -84,8 +84,9 @@ async function handle(req: Request) {
       const clauses = ["p.deleted=0", blockClause];
       const args: (string | number)[] = [adminHandle(), uid, uid, uid, uid, uid, uid];
       const single = url.searchParams.get("post");
-      // The plain "everyone" feed shows pinned posts first, once, on page one.
-      const mainFeed = filter === "everyone" && !q && !profile && !single;
+      // Pinned posts are site announcements: page one of the Everyone and
+      // Following tabs shows them first, once, whoever the member follows.
+      const mainFeed = ["everyone", "following"].includes(filter) && !q && !profile && !single;
       if (mainFeed) clauses.push("p.pinned=0");
       if (filter === "following") {
         clauses.push(

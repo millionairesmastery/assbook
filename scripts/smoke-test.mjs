@@ -302,6 +302,9 @@ try {
     assert.equal(withPin[0].pinned, 1);
     assert.equal(withPin[0].official, 1);
     assert.equal(withPin.filter((x) => x.id === welcome.id).length, 1, "Pinned post appears once");
+    const followingPin = (await req(b, "feed?filter=following")).posts;
+    assert.equal(followingPin[0]?.id, welcome.id, "Pinned post tops the Following tab too");
+    assert.equal(followingPin.filter((x) => x.id === welcome.id).length, 1);
     assert.equal((await req(admin, "admin/pin/" + welcome.id, "POST", {})).pinned, false);
     await req(a, "admin/pin/" + welcome.id, "POST", {}, 403);
     const adminProfile = (await req(anon, "profile/" + adminUser.handle)).profile;
