@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUpRight, Code2, Download } from "lucide-react";
+import { ArrowUpRight, Code2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +48,9 @@ export function RulesDialog({ onClose }: { onClose: () => void }) {
             Uploaded photos are not automatically verified. This beta relies on
             community reports and moderator review.
           </p>
+          <a className="text-link" href="/rules">
+            Read the full rules <ArrowUpRight size={14} aria-hidden="true" />
+          </a>
         </div>
       </DialogContent>
     </Dialog>
@@ -78,24 +81,24 @@ export function SourceDialog({
             <b>The internet could use a little less seriousness.</b>
           </p>
           <p>
-            Assbook is an open-source social network with one ridiculous rule:
-            your profile photo is your own fully clothed behind.
+            Assbook is a social network with one ridiculous rule: your profile
+            photo is your own fully clothed behind.
           </p>
           <p>
-            MIT-licensed. Free to use, modify, and self-host. Bring your own
-            puns.
+            Our open-source edition is MIT-licensed and free to self-host. Bring
+            your own puns.
           </p>
-          <a className="primary" href="/assbook-source.zip" download>
-            <Download size={17} aria-hidden="true" />
-            Download the source
+          <a
+            className="primary"
+            href={SOURCE_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Code2 size={17} aria-hidden="true" />
+            Explore the open-source project
           </a>
           <p className="small muted">
-            Includes the app, Cloudflare setup guide, and contribution
-            guidelines. Also on{" "}
-            <a href={SOURCE_URL} target="_blank" rel="noreferrer">
-              GitHub
-            </a>
-            .
+            The public edition includes the app and self-hosting guide.
           </p>
           <button className="text-link" onClick={onOpenRules}>
             Community rules <ArrowUpRight size={14} aria-hidden="true" />

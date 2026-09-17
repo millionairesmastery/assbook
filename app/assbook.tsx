@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/assbook/app-shell";
+import { LandingPage } from "@/components/assbook/landing/landing-page";
 import { SearchField } from "@/components/assbook/search-field";
 import { useAgentTools } from "@/components/assbook/agent-tools";
 import { Feed } from "@/components/assbook/feed/feed";
@@ -94,6 +95,9 @@ export default function Assbook() {
   const [query, setQuery] = useState("");
   const [profileHandle, setProfileHandle] = useState("");
   const [postId, setPostId] = useState("");
+  // Null until the address bar has been read. A shared ?post= or ?profile=
+  // link opens the app itself, signed in or not, so the content is there.
+  const [deepLink, setDeepLink] = useState<boolean | null>(null);
 
   const [modal, setModal] = useState("");
   const [infoModal, setInfoModal] = useState("");
@@ -140,6 +144,11 @@ export default function Assbook() {
         ? "everyone"
         : feedTab;
 
+  // A visitor with no account and no shared link gets the landing page, and
+  // the app behind it never loads: no feed, no people, no top posts.
+  const landing = viewer.ready && !user && deepLink === false;
+  const appReady = viewer.ready && !landing;
+
   const feed = useFeed({
     filter: feedFilter,
     query,
@@ -147,12 +156,12 @@ export default function Assbook() {
       view === "profile" && !savedTab ? profileTarget || "__none__" : "",
     singlePostId,
     viewerId,
-    ready: viewer.ready,
+    ready: appReady,
   });
   const peopleSearch = usePersonSearch(search);
-  const people = usePeople(viewerId, viewer.ready);
-  const topPosts = useTopPosts(viewerId, viewer.ready);
-  const profileView = useProfile(profileTarget, viewerId, viewer.ready);
+  const people = usePeople(viewerId, appReady);
+  const topPosts = useTopPosts(viewerId, appReady);
+  const profileView = useProfile(profileTarget, viewerId, appReady);
 
   // Stable handles, so the memoised post cards are not thrown away every time
   // a single post in the list changes.
@@ -213,11 +222,27 @@ export default function Assbook() {
       const params = new URLSearchParams(location.search);
       const handle = params.get("profile");
       const single = params.get("post");
+      const auth = params.get("auth");
       if (handle) {
         setProfileHandle(handle);
         setView("profile");
       } else if (single) {
         setPostId(single);
+      }
+      setDeepLink(!!(handle || single));
+      // The legal pages send people back here with ?auth=login or
+      // ?auth=signup. The dialog opens, and the parameter is spent: it has no
+      // business in a link somebody copies afterwards.
+      if (auth === "login" || auth === "signup") {
+        setAuthMode(auth);
+        setModal("auth");
+        params.delete("auth");
+        const rest = params.toString();
+        history.replaceState(
+          null,
+          "",
+          location.pathname + (rest ? "?" + rest : ""),
+        );
       }
     };
     readStoredTab();
@@ -593,160 +618,16 @@ export default function Assbook() {
   const heading = viewHeading(view, tab, profileView.profile?.name);
   const kicker = viewKicker(view, tab);
 
-  return (
-    <AppShell
-      user={user}
-      view={view === "profile" && !ownProfile ? "" : view}
-      search={search}
-      searchPeople={peopleSearch.people}
-      searched={peopleSearch.searched}
-      onSearch={onSearch}
-      onChooseView={chooseView}
-      onVisitProfile={visitProfile}
-      onEditProfile={() => setModal("edit")}
-      onOpenSecurity={() => setModal("security")}
-      onOpenBlocked={() => setModal("blocked")}
-      onOpenModeration={() => setModal("moderation")}
-      onSignOut={signOut}
-      onJoin={() => {
-        setAuthMode("signup");
-        setModal("auth");
-      }}
-      onSignIn={() => {
-        setAuthMode("login");
-        setModal("auth");
-      }}
-      onOpenRules={() => setInfoModal("rules")}
-      onOpenSource={() => setInfoModal("source")}
-      onCompose={startPost}
-      onFocusSearch={focusSearch}
-      rail={
-        <>
-          <TopPostsCard posts={topPosts} onOpenPost={openPost} />
-          <PeopleRail
-            people={people.people}
-            loading={people.loading}
-            error={people.error}
-            onRetry={people.retry}
-            onVisit={visitProfile}
-            onFollow={follow}
-            pending={pending}
-            onOpenAll={() => chooseView("community")}
-          />
-        </>
-      }
-    >
-      <section className="intro">
-        <div>
-          {kicker && <div className="eyebrow">{kicker}</div>}
-          <h1>
-            {heading}
-            <span aria-hidden="true">.</span>
-          </h1>
-          <p>{viewBlurb(view, tab)}</p>
-        </div>
-        <span className="intro-stamp" aria-hidden="true">
-          100%<small>cheeky</small>
-        </span>
-      </section>
-      <SearchField
-        value={search}
-        onChange={onSearch}
-        variant="mobile"
-        inputRef={mobileSearchRef}
-        people={peopleSearch.people}
-        searched={peopleSearch.searched}
-        onSelectPerson={visitProfile}
-      />
-      {viewer.error && (
-        <div className="state-card" role="alert">
-          <p>Could not load your account. {viewer.error}</p>
-          <button className="quiet" onClick={viewer.retry}>
-            <RefreshCw size={16} aria-hidden="true" />
-            Try again
-          </button>
-        </div>
-      )}
-      {view === "profile" && (
-        <ProfileCard
-          profile={profileView.profile}
-          viewer={user}
-          loading={profileView.loading}
-          error={profileView.error}
-          onRetry={profileView.retry}
-          onEdit={() => setModal("edit")}
-          onOpenSecurity={() => setModal("security")}
-          onOpenFollowers={() => setFollowList("followers")}
-          onOpenFollowing={() => setFollowList("following")}
-          tab={profileTab}
-          onTab={(next) => setProfileTab(next === "saved" ? "saved" : "posts")}
-          onFollow={follow}
-          followPending={pending.has(
-            "follow:" + (profileView.profile?.id ?? ""),
-          )}
-        />
-      )}
-      {view === "feed" && !query && !postId && (
-        <Composer
-          user={user}
-          draft={draft}
-          onDraftChange={setDraft}
-          image={postImage}
-          onRemoveImage={() => setPostImage(null)}
-          onAddPhoto={() => {
-            if (requireUser()) setModal("upload");
-          }}
-          onSubmit={submitPost}
-          submitting={pending.has("post")}
-          textareaRef={draftRef}
-        />
-      )}
-      {view === "community" ? (
-        <PeopleView
-          people={people.people}
-          loading={people.loading}
-          error={people.error}
-          onRetry={people.retry}
-          onVisit={visitProfile}
-          onFollow={follow}
-          pending={pending}
-        />
-      ) : (
-        <Feed
-          ownProfile={ownProfile}
-          posts={feed.posts}
-          loading={feed.loading}
-          updating={feed.updating}
-          loadingMore={feed.loadingMore}
-          hasMore={feed.hasMore}
-          error={feed.error}
-          onRetry={retryFeed}
-          onLoadMore={loadMore}
-          view={view}
-          feedTab={shownFeedTab}
-          savedTab={savedTab}
-          query={query}
-          viewer={user}
-          now={now}
-          pending={pending}
-          singlePostId={singlePostId}
-          otherHandle={otherHandle}
-          onExitSinglePost={exitSinglePost}
-          onFeedTab={chooseFeedTab}
-          onCompose={startPost}
-          onFindPeople={() => chooseView("community")}
-          onLike={like}
-          onSave={save}
-          onReplies={openReplies}
-          onShare={share}
-          onVisitProfile={visitProfile}
-          onDelete={deletePost}
-          onReport={openReport}
-          onBlock={blockAuthor}
-          onPin={togglePin}
-        />
-      )}
+  // Nothing is decided until the viewer has been fetched and the address bar
+  // read. One neutral paint beats a flash of the wrong front door.
+  if (!viewer.ready || deepLink === null) {
+    return <div className="landing-boot" role="status" aria-label="Loading Assbook" />;
+  }
 
+  // The dialogs sit beside the page, not inside it: the landing page and the
+  // app both need them, and Radix puts them in a portal either way.
+  const dialogs = (
+    <>
       {modal === "auth" && (
         <AuthDialog
           initialMode={authMode}
@@ -905,6 +786,184 @@ export default function Assbook() {
       {shareOpen && (
         <ShareDialog link={shareLink} onClose={() => setShareOpen(false)} />
       )}
-    </AppShell>
+    </>
+  );
+
+  if (landing) {
+    return (
+      <>
+        <LandingPage
+          onJoin={() => {
+            setAuthMode("signup");
+            setModal("auth");
+          }}
+          onSignIn={() => {
+            setAuthMode("login");
+            setModal("auth");
+          }}
+        />
+        {dialogs}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <AppShell
+        user={user}
+        view={view === "profile" && !ownProfile ? "" : view}
+        search={search}
+        searchPeople={peopleSearch.people}
+        searched={peopleSearch.searched}
+        onSearch={onSearch}
+        onChooseView={chooseView}
+        onVisitProfile={visitProfile}
+        onEditProfile={() => setModal("edit")}
+        onOpenSecurity={() => setModal("security")}
+        onOpenBlocked={() => setModal("blocked")}
+        onOpenModeration={() => setModal("moderation")}
+        onSignOut={signOut}
+        onJoin={() => {
+          setAuthMode("signup");
+          setModal("auth");
+        }}
+        onSignIn={() => {
+          setAuthMode("login");
+          setModal("auth");
+        }}
+        onOpenRules={() => setInfoModal("rules")}
+        onOpenSource={() => setInfoModal("source")}
+        onCompose={startPost}
+        onFocusSearch={focusSearch}
+        rail={
+          <>
+            <TopPostsCard posts={topPosts} onOpenPost={openPost} />
+            <PeopleRail
+              people={people.people}
+              loading={people.loading}
+              error={people.error}
+              onRetry={people.retry}
+              onVisit={visitProfile}
+              onFollow={follow}
+              pending={pending}
+              onOpenAll={() => chooseView("community")}
+            />
+          </>
+        }
+      >
+        <section className="intro">
+          <div>
+            {kicker && <div className="eyebrow">{kicker}</div>}
+            <h1>
+              {heading}
+              <span aria-hidden="true">.</span>
+            </h1>
+            <p>{viewBlurb(view, tab)}</p>
+          </div>
+          <span className="intro-stamp" aria-hidden="true">
+            100%<small>cheeky</small>
+          </span>
+        </section>
+        <SearchField
+          value={search}
+          onChange={onSearch}
+          variant="mobile"
+          inputRef={mobileSearchRef}
+          people={peopleSearch.people}
+          searched={peopleSearch.searched}
+          onSelectPerson={visitProfile}
+        />
+        {viewer.error && (
+          <div className="state-card" role="alert">
+            <p>Could not load your account. {viewer.error}</p>
+            <button className="quiet" onClick={viewer.retry}>
+              <RefreshCw size={16} aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        )}
+        {view === "profile" && (
+          <ProfileCard
+            profile={profileView.profile}
+            viewer={user}
+            loading={profileView.loading}
+            error={profileView.error}
+            onRetry={profileView.retry}
+            onEdit={() => setModal("edit")}
+            onOpenSecurity={() => setModal("security")}
+            onOpenFollowers={() => setFollowList("followers")}
+            onOpenFollowing={() => setFollowList("following")}
+            tab={profileTab}
+            onTab={(next) => setProfileTab(next === "saved" ? "saved" : "posts")}
+            onFollow={follow}
+            followPending={pending.has(
+              "follow:" + (profileView.profile?.id ?? ""),
+            )}
+          />
+        )}
+        {view === "feed" && !query && !postId && (
+          <Composer
+            user={user}
+            draft={draft}
+            onDraftChange={setDraft}
+            image={postImage}
+            onRemoveImage={() => setPostImage(null)}
+            onAddPhoto={() => {
+              if (requireUser()) setModal("upload");
+            }}
+            onSubmit={submitPost}
+            submitting={pending.has("post")}
+            textareaRef={draftRef}
+          />
+        )}
+        {view === "community" ? (
+          <PeopleView
+            people={people.people}
+            loading={people.loading}
+            error={people.error}
+            onRetry={people.retry}
+            onVisit={visitProfile}
+            onFollow={follow}
+            pending={pending}
+          />
+        ) : (
+          <Feed
+            ownProfile={ownProfile}
+            posts={feed.posts}
+            loading={feed.loading}
+            updating={feed.updating}
+            loadingMore={feed.loadingMore}
+            hasMore={feed.hasMore}
+            error={feed.error}
+            onRetry={retryFeed}
+            onLoadMore={loadMore}
+            view={view}
+            feedTab={shownFeedTab}
+            savedTab={savedTab}
+            query={query}
+            viewer={user}
+            now={now}
+            pending={pending}
+            singlePostId={singlePostId}
+            otherHandle={otherHandle}
+            onExitSinglePost={exitSinglePost}
+            onFeedTab={chooseFeedTab}
+            onCompose={startPost}
+            onFindPeople={() => chooseView("community")}
+            onLike={like}
+            onSave={save}
+            onReplies={openReplies}
+            onShare={share}
+            onVisitProfile={visitProfile}
+            onDelete={deletePost}
+            onReport={openReport}
+            onBlock={blockAuthor}
+            onPin={togglePin}
+          />
+        )}
+
+      </AppShell>
+      {dialogs}
+    </>
   );
 }

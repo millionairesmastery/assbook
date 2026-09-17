@@ -142,8 +142,16 @@ export function AuthDialog({
                   aria-labelledby="community-rules-text"
                 />
                 <span id="community-rules-text">
-                  I’ll keep photos my own and fully clothed, and treat people
-                  kindly.
+                  I’m 18 or older, I’ll keep photos my own and fully clothed,
+                  and I agree to the{" "}
+                  <a href="/terms" target="_blank" rel="noreferrer">
+                    Terms
+                  </a>{" "}
+                  and{" "}
+                  <a href="/rules" target="_blank" rel="noreferrer">
+                    Community rules
+                  </a>
+                  .
                 </span>
               </label>
               <p className="small muted">

@@ -20,6 +20,7 @@ import {
 import { Avatar } from "@/components/assbook/avatar";
 import { SearchField } from "@/components/assbook/search-field";
 import { mobileNavItems, navItems } from "@/components/assbook/nav-items";
+import { legalLinks, SOURCE_URL } from "@/components/assbook/landing/site-links";
 import type { Profile } from "@/lib/types";
 
 export type AppShellProps = {
@@ -184,6 +185,19 @@ export function AppShell({
           </Sidebar>
           <main className="feed-main" id="main-content">
             {children}
+            <footer className="app-footer">
+              <span>Assbook © 2026 · Fun by design, serious about safety and business.</span>
+              <nav aria-label="Footer">
+                {legalLinks.map(({ href, label }) => (
+                  <Link key={href} href={href}>
+                    {label}
+                  </Link>
+                ))}
+                <a href={SOURCE_URL} target="_blank" rel="noreferrer">
+                  Open source
+                </a>
+              </nav>
+            </footer>
           </main>
           <aside className="right-rail">
             {rail}
