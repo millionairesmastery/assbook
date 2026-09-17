@@ -363,10 +363,12 @@ export function PostPeekDialog({
         onClose();
       }}
     >
-      <DialogContent className="assbook-dialog peek-post">
+      <DialogContent className="assbook-dialog peek-post" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Post a Peek</DialogTitle>
-          <DialogDescription>What is behind you today?</DialogDescription>
+          <DialogDescription>
+            What is behind you today? Five seconds, up for 24 hours.
+          </DialogDescription>
         </DialogHeader>
         {error && (
           <div className="form-error" role="alert">
@@ -375,32 +377,35 @@ export function PostPeekDialog({
         )}
         <div className="form-stack">
           {!clip && !stream && (
-            <div className="peek-ways">
-              <button
-                className="upload-box"
-                disabled={opening}
-                onClick={() => void openCamera(facing)}
-              >
-                {opening ? (
-                  <Loader2 className="spin" size={28} aria-hidden="true" />
-                ) : (
-                  <Camera size={28} aria-hidden="true" />
-                )}
-                <b>Record 5 seconds</b>
-                <span>Your camera, five seconds, no retakes needed</span>
-              </button>
-              <label className="upload-box">
-                <Film size={28} aria-hidden="true" />
-                <b>Choose a clip</b>
-                <span>MP4, WebM or MOV · up to 8 MB · five seconds</span>
-                <input
-                  type="file"
-                  aria-label="Choose a clip"
-                  accept="video/mp4,video/webm,video/quicktime"
-                  onChange={(event) => void choose(event.target.files?.[0])}
-                />
-              </label>
-            </div>
+            <>
+              <div className="peek-ways">
+                <button
+                  className="peek-way"
+                  disabled={opening}
+                  onClick={() => void openCamera(facing)}
+                >
+                  {opening ? (
+                    <Loader2 className="spin" size={22} aria-hidden="true" />
+                  ) : (
+                    <Camera size={22} aria-hidden="true" />
+                  )}
+                  <b>Record</b>
+                </button>
+                <label className="peek-way">
+                  <Film size={22} aria-hidden="true" />
+                  <b>Choose a clip</b>
+                  <input
+                    type="file"
+                    aria-label="Choose a clip"
+                    accept="video/mp4,video/webm,video/quicktime"
+                    onChange={(event) => void choose(event.target.files?.[0])}
+                  />
+                </label>
+              </div>
+              <p className="muted small peek-ways-note">
+                MP4, WebM or MOV · up to 8 MB · five seconds at most
+              </p>
+            </>
           )}
           {stream && (
             <div className="peek-camera">
@@ -473,22 +478,22 @@ export function PostPeekDialog({
                 preload="auto"
                 aria-label="Your clip"
               />
-              <button className="quiet peek-again" onClick={startOver}>
-                <RefreshCw size={15} aria-hidden="true" />
-                Pick another clip
+              <button className="text-link peek-again" onClick={startOver}>
+                <RefreshCw size={14} aria-hidden="true" />
+                Pick another
               </button>
             </>
           )}
           <label>
             <span className="label-row">
-              A caption, if you like
+              Caption
               <CharCounter value={caption} max={140} show={counter.focused} />
             </span>
             <input
               value={caption}
               maxLength={140}
               onChange={(event) => setCaption(event.target.value)}
-              placeholder="Five seconds of what, exactly?"
+              placeholder="Five seconds of what, exactly? (optional)"
               {...counter.handlers}
             />
           </label>
@@ -500,30 +505,38 @@ export function PostPeekDialog({
               aria-labelledby="peek-rules-text"
             />
             <span id="peek-rules-text">
-              This is my clip (or I have permission to share it), and it shows
-              no nudity or sexual content.
+              My clip, or shared with permission. No nudity or sexual content.
             </span>
           </label>
-          <button
-            className="primary"
-            disabled={!clip || !agreed || !!step}
-            onClick={() => void post()}
-          >
-            {step ? (
-              <>
-                <Loader2 className="spin" size={15} aria-hidden="true" />
-                {busyText}
-              </>
-            ) : (
-              <>
-                Post it <ArrowRight size={17} aria-hidden="true" />
-              </>
-            )}
-          </button>
-          <p className="muted small">
-            A peek is up for 24 hours. The clip goes after that; the likes,
-            replies and views stay.
-          </p>
+          <div className="peek-footer">
+            <button
+              type="button"
+              className="quiet"
+              disabled={!!step}
+              onClick={() => {
+                stopRecording();
+                onClose();
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary"
+              disabled={!clip || !agreed || !!step}
+              onClick={() => void post()}
+            >
+              {step ? (
+                <>
+                  <Loader2 className="spin" size={15} aria-hidden="true" />
+                  {busyText}
+                </>
+              ) : (
+                <>
+                  Post it <ArrowRight size={17} aria-hidden="true" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

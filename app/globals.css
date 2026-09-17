@@ -2784,3 +2784,77 @@ button.stat:hover {
   background: rgba(255, 255, 255, 0.28);
   outline: none;
 }
+
+/* Post a Peek: one phone screen, no scrolling. */
+.peek-post .form-stack {
+  gap: 10px;
+}
+.peek-ways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.peek-way {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px;
+  border: 1.5px dashed #d9dee5;
+  border-radius: 14px;
+  background: #f7f8fa;
+  color: #1c2328;
+  font-size: 14px;
+  cursor: pointer;
+}
+.peek-way:hover,
+.peek-way:focus-within {
+  border-color: #c94120;
+  background: #fff5f0;
+}
+.peek-way input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.peek-ways-note {
+  margin: -4px 0 0;
+  text-align: center;
+}
+.peek-post .peek-preview,
+.peek-post .peek-camera-view {
+  max-height: 34svh;
+  width: 100%;
+  object-fit: contain;
+  background: #000;
+  border-radius: 14px;
+}
+.peek-again {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+}
+.peek-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 2px;
+}
+.peek-footer .quiet {
+  min-height: 44px;
+}
+@media (max-width: 650px) {
+  .peek-post .peek-preview,
+  .peek-post .peek-camera-view {
+    max-height: 30svh;
+  }
+  .peek-way {
+    min-height: 76px;
+  }
+}
