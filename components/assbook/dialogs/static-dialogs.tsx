@@ -24,8 +24,8 @@ export function RulesDialog({ onClose }: { onClose: () => void }) {
           <p>
             <b>1. Pants on. Always.</b>
             <br />
-            Profile photos show your own fully clothed behind. No nudity or
-            sexual content.
+            Profile photos show your own fully clothed behind. No underwear,
+            no swimwear, no nudity or sexual content, anywhere on Assbook.
           </p>
           <p>
             <b>2. Your photo. Your permission.</b>
@@ -44,9 +44,15 @@ export function RulesDialog({ onClose }: { onClose: () => void }) {
             <br />
             Report a post from its menu, or block an account to leave it behind.
           </p>
+          <p>
+            <b>5. Adults only.</b>
+            <br />
+            Assbook is for people 18 and older.
+          </p>
           <p className="small muted">
-            Uploaded photos are not automatically verified. This beta relies on
-            community reports and moderator review.
+            Every photo is checked automatically before it is stored. A
+            moderator reviews anything the check is unsure about, and every
+            report is read by a person.
           </p>
           <a className="text-link" href="/rules">
             Read the full rules <ArrowUpRight size={14} aria-hidden="true" />
