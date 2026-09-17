@@ -17,6 +17,7 @@ export function middleware() {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "connect-src 'self'",
+      "worker-src 'self' blob:",
       "font-src 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",

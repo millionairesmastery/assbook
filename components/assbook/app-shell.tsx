@@ -2,15 +2,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Toaster } from "sonner";
-import {
-  Check,
-  Code2,
-  LogOut,
-  Pencil,
-  Plus,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { Check, Code2, LogOut, Pencil, Plus, Sparkles } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -27,13 +19,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar } from "@/components/assbook/avatar";
 import { SearchField } from "@/components/assbook/search-field";
-import { navItems } from "@/components/assbook/nav-items";
+import { mobileNavItems, navItems } from "@/components/assbook/nav-items";
 import type { Profile } from "@/lib/types";
 
 export type AppShellProps = {
   user: Profile | null;
+  /** The nav item to highlight, or "" while visiting somebody else. */
   view: string;
   search: string;
+  searchPeople: Profile[];
+  searched: boolean;
   onSearch: (next: string) => void;
   onChooseView: (view: string) => void;
   onVisitProfile: (handle: string) => void;
@@ -56,6 +51,8 @@ export function AppShell({
   user,
   view,
   search,
+  searchPeople,
+  searched,
   onSearch,
   onChooseView,
   onVisitProfile,
@@ -86,7 +83,7 @@ export function AppShell({
             href="/"
             onClick={(event) => {
               event.preventDefault();
-              onChooseView("everyone");
+              onChooseView("feed");
             }}
           >
             <span className="brandmark" aria-hidden="true">
@@ -95,7 +92,14 @@ export function AppShell({
             assbook
             <span className="beta">BETA</span>
           </Link>
-          <SearchField value={search} onChange={onSearch} variant="topbar" />
+          <SearchField
+            value={search}
+            onChange={onSearch}
+            variant="topbar"
+            people={searchPeople}
+            searched={searched}
+            onSelectPerson={onVisitProfile}
+          />
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -233,23 +237,21 @@ export function AppShell({
           <Pencil size={21} aria-hidden="true" />
         </button>
         <nav className="mobile-nav" aria-label="Main navigation">
-          {navItems.map(({ icon: Icon, label, view: next }) => (
+          {mobileNavItems.map(({ icon: Icon, label, view: next, action }) => (
             <button
-              key={next}
+              key={label}
               aria-label={label}
-              aria-current={view === next ? "page" : undefined}
-              className={view === next ? "active" : ""}
-              onClick={() => onChooseView(next)}
+              aria-current={next && view === next ? "page" : undefined}
+              className={next && view === next ? "active" : ""}
+              onClick={() => {
+                if (action === "search") onFocusSearch();
+                else if (action === "about") onOpenSource();
+                else if (next) onChooseView(next);
+              }}
             >
               <Icon size={22} aria-hidden="true" />
             </button>
           ))}
-          <button aria-label="Search Assbook" onClick={onFocusSearch}>
-            <Search size={22} aria-hidden="true" />
-          </button>
-          <button aria-label="About Assbook" onClick={onOpenSource}>
-            <Code2 size={22} aria-hidden="true" />
-          </button>
         </nav>
       </div>
     </SidebarProvider>

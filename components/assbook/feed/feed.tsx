@@ -3,7 +3,7 @@ import { ArrowRight, Loader2, RefreshCw } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PostCard } from "@/components/assbook/feed/post-card";
 import { EmptyState } from "@/components/assbook/feed/empty-state";
-import { viewName } from "@/components/assbook/nav-items";
+import { feedTabName } from "@/components/assbook/nav-items";
 import { plural } from "@/lib/format";
 import type { Post, Profile } from "@/lib/types";
 
@@ -17,6 +17,10 @@ export type FeedProps = {
   onRetry: () => void;
   onLoadMore: () => void;
   view: string;
+  /** Which tab of the main feed is showing: "everyone" or "following". */
+  feedTab: string;
+  /** True on your own profile with the Saved tab open. */
+  savedTab: boolean;
   query: string;
   viewer: Profile | null;
   ownProfile?: boolean;
@@ -25,7 +29,7 @@ export type FeedProps = {
   singlePostId: string;
   otherHandle: string;
   onExitSinglePost: () => void;
-  onChooseView: (view: string) => void;
+  onFeedTab: (tab: string) => void;
   onCompose: () => void;
   onFindPeople: () => void;
   onLike: (post: Post) => void;
@@ -49,6 +53,8 @@ export function Feed({
   onRetry,
   onLoadMore,
   view,
+  feedTab,
+  savedTab,
   query,
   viewer,
   now,
@@ -56,7 +62,7 @@ export function Feed({
   singlePostId,
   otherHandle,
   onExitSinglePost,
-  onChooseView,
+  onFeedTab,
   onCompose,
   onFindPeople,
   onLike,
@@ -72,11 +78,20 @@ export function Feed({
 }: FeedProps) {
   const label = query
     ? "SEARCH RESULTS"
-    : view === "saved"
+    : savedTab
       ? "SAVED FOR LATER"
       : view === "profile"
         ? (ownProfile ? "YOUR POSTS ↓" : "THEIR POSTS ↓")
         : "THE LATEST ↓";
+
+  // What the empty state should apologise for, which is not always the view.
+  const emptyContext = savedTab
+    ? "saved"
+    : view === "profile"
+      ? "profile"
+      : feedTab === "following"
+        ? "following"
+        : "feed";
 
   const announcement =
     query && !loading && !error
@@ -102,8 +117,11 @@ export function Feed({
         {view === "profile" ? (
           <span />
         ) : (
-          <Tabs value={view} onValueChange={onChooseView}>
-            <TabsList variant="line" aria-label={"Viewing: " + viewName(view)}>
+          <Tabs value={feedTab} onValueChange={onFeedTab}>
+            <TabsList
+              variant="line"
+              aria-label={"Viewing: " + feedTabName(feedTab)}
+            >
               <TabsTrigger value="everyone">Everyone</TabsTrigger>
               <TabsTrigger value="following">Following</TabsTrigger>
             </TabsList>
@@ -137,7 +155,7 @@ export function Feed({
         </div>
       ) : posts.length === 0 ? (
         <EmptyState
-          view={view}
+          view={emptyContext}
           query={query}
           otherHandle={otherHandle}
           onCompose={onCompose}

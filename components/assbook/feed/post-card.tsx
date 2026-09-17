@@ -62,8 +62,8 @@ export const PostCard = memo(function PostCard({
           className="person-name"
           onClick={() => onVisitProfile(post.handle)}
         >
-          <b>
-            {post.name}
+          <b className="name-line">
+            <span className="name-text">{post.name}</span>
             {post.official === 1 && <OfficialBadge />}
             {post.demo === 1 && <span className="tiny-badge">SAMPLE</span>}
           </b>

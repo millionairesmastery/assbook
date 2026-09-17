@@ -4,6 +4,7 @@ export type Profile = {
   name: string;
   bio: string;
   avatar: string | null;
+  link?: string | null;
   demo: number;
   created: number;
   following?: number;
@@ -13,6 +14,7 @@ export type Profile = {
   official?: number;
   isAdmin?: boolean;
   nameLockedUntil?: number | null;
+  onboarded?: boolean;
 };
 export type Post = {
   id: string;

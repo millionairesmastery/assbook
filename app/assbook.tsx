@@ -22,6 +22,7 @@ import { AuthDialog } from "@/components/assbook/auth/auth-dialog";
 import { AccountSecurityDialog } from "@/components/assbook/auth/account-security-dialog";
 import { AccountRecoveryDialog } from "@/components/assbook/auth/account-recovery-dialog";
 import { WelcomeDialog } from "@/components/assbook/auth/welcome-dialog";
+import { FollowOnboardingDialog } from "@/components/assbook/auth/follow-onboarding-dialog";
 import {
   EmailConfirmedDialog,
   type EmailConfirmation,
@@ -34,11 +35,19 @@ import {
   ShareDialog,
   SourceDialog,
 } from "@/components/assbook/dialogs/static-dialogs";
-import { privateViews, viewBlurb, viewHeading } from "@/components/assbook/nav-items";
+import {
+  privateViews,
+  viewBlurb,
+  viewHeading,
+  viewKicker,
+  type FeedTab,
+  type ProfileTab,
+} from "@/components/assbook/nav-items";
 import { useAsyncAction } from "@/hooks/use-async-action";
 import { useFeed } from "@/hooks/use-feed";
 import { useNow } from "@/hooks/use-now";
 import { usePeople } from "@/hooks/use-people";
+import { usePersonSearch } from "@/hooks/use-person-search";
 import { useProfile } from "@/hooks/use-profile";
 import { useTopPosts } from "@/hooks/use-top";
 import { useViewer } from "@/hooks/use-viewer";
@@ -46,6 +55,27 @@ import { api, errorMessage } from "@/lib/api-client";
 import type { Post, Profile } from "@/lib/types";
 
 const RECOVERY_MODES = ["recover", "reset"];
+const FEED_TAB_KEY = "assbook:feed-tab";
+
+// The chosen feed tab outlives the tab it was chosen in. Storage can be turned
+// off or full, and neither is worth an error on screen.
+function storedTab(): FeedTab | null {
+  try {
+    return localStorage.getItem(FEED_TAB_KEY) === "following"
+      ? "following"
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeTab(tab: FeedTab) {
+  try {
+    localStorage.setItem(FEED_TAB_KEY, tab);
+  } catch {
+    // Nothing to do: the tab simply will not be remembered.
+  }
+}
 
 export default function Assbook() {
   const viewer = useViewer();
@@ -54,7 +84,12 @@ export default function Assbook() {
   const now = useNow();
   const action = useAsyncAction();
 
-  const [view, setView] = useState("everyone");
+  // Where you are standing: the feed, the community or a profile. The tabs
+  // inside the feed and the profile have their own state, so switching a tab
+  // never moves the highlight in the sidebar.
+  const [view, setView] = useState("feed");
+  const [feedTab, setFeedTab] = useState<FeedTab>("everyone");
+  const [profileTab, setProfileTab] = useState<ProfileTab>("posts");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [profileHandle, setProfileHandle] = useState("");
@@ -70,6 +105,9 @@ export default function Assbook() {
     null,
   );
   const [followList, setFollowList] = useState<FollowListMode | "">("");
+  // The follow nudge is offered once per page load. Skipping it leaves it
+  // undone on the server, so it comes back on the next visit, not this one.
+  const [onboardingClosed, setOnboardingClosed] = useState(false);
   const [replyPost, setReplyPost] = useState<Post | null>(null);
   const [reportPost, setReportPost] = useState<Post | null>(null);
   const [shareLink, setShareLink] = useState("");
@@ -83,16 +121,35 @@ export default function Assbook() {
 
   const ownHandle = user?.handle ?? "";
   const profileTarget = view === "profile" ? profileHandle || ownHandle : "";
-  const singlePostId = view === "everyone" && !query ? postId : "";
+  const singlePostId = view === "feed" && !query ? postId : "";
+  const ownProfile =
+    view === "profile" && (!profileHandle || profileHandle === ownHandle);
+  // Saved posts live on your own profile, under a tab of their own.
+  const savedTab = ownProfile && !!user && profileTab === "saved";
+
+  const followingFeed = view === "feed" && feedTab === "following" && !query;
+
+  // Which slice of posts the server should send. A search or a single post is
+  // always asked of everybody, whichever feed tab happens to be open.
+  const feedFilter =
+    view === "profile"
+      ? savedTab
+        ? "saved"
+        : "profile"
+      : query || singlePostId
+        ? "everyone"
+        : feedTab;
 
   const feed = useFeed({
-    view,
+    filter: feedFilter,
     query,
-    profileTarget: view === "profile" ? profileTarget || "__none__" : "",
+    profileTarget:
+      view === "profile" && !savedTab ? profileTarget || "__none__" : "",
     singlePostId,
     viewerId,
     ready: viewer.ready,
   });
+  const peopleSearch = usePersonSearch(search);
   const people = usePeople(viewerId, viewer.ready);
   const topPosts = useTopPosts(viewerId, viewer.ready);
   const profileView = useProfile(profileTarget, viewerId, viewer.ready);
@@ -109,6 +166,8 @@ export default function Assbook() {
   } = feed;
   const { patchFollowing: patchPersonFollowing, revalidate: revalidatePeople } =
     people;
+  // Asks /api/me again. Used after onboarding, so `onboarded` stops being false.
+  const { retry: refreshViewer } = viewer;
   const {
     patchFollowing: patchProfileFollowing,
     bumpFollowingCount,
@@ -144,6 +203,12 @@ export default function Assbook() {
         break;
       }
     };
+    // The tab you left the feed on, read after mount: the server has no
+    // localStorage, and guessing during render would not survive hydration.
+    const readStoredTab = () => {
+      const stored = storedTab();
+      if (stored) setFeedTab(stored);
+    };
     const readSearch = () => {
       const params = new URLSearchParams(location.search);
       const handle = params.get("profile");
@@ -155,6 +220,7 @@ export default function Assbook() {
         setPostId(single);
       }
     };
+    readStoredTab();
     readSearch();
     readFragment();
     window.addEventListener("hashchange", readFragment);
@@ -165,6 +231,21 @@ export default function Assbook() {
     const timer = setTimeout(() => setQuery(search), 250);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // The tab only changes which posts the feed asks for. The view, and with it
+  // the highlight in the sidebar, stays on The Bottom Line.
+  const chooseFeedTab = useCallback(
+    (next: string) => {
+      const tab: FeedTab = next === "following" ? "following" : "everyone";
+      setFeedTab(tab);
+      storeTab(tab);
+      setSearch("");
+      setQuery("");
+      if (postId || query) history.replaceState(null, "", "/");
+      setPostId("");
+    },
+    [postId, query],
+  );
 
   const requireUser = useCallback(() => {
     if (user) return true;
@@ -181,6 +262,7 @@ export default function Assbook() {
       setQuery("");
       setProfileHandle("");
       setPostId("");
+      setProfileTab("posts");
       setFollowList("");
       history.replaceState(null, "", "/");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -191,6 +273,7 @@ export default function Assbook() {
   const visitProfile = useCallback((handle: string) => {
     setView("profile");
     setProfileHandle(handle);
+    setProfileTab("posts");
     setSearch("");
     setQuery("");
     setPostId("");
@@ -202,14 +285,15 @@ export default function Assbook() {
 
   const onSearch = useCallback((next: string) => {
     setSearch(next);
-    setView("everyone");
+    setView("feed");
     setProfileHandle("");
     setPostId("");
+    setProfileTab("posts");
     history.replaceState(null, "", "/");
   }, []);
 
   const openPost = useCallback((id: string) => {
-    setView("everyone");
+    setView("feed");
     setSearch("");
     setQuery("");
     setProfileHandle("");
@@ -224,7 +308,7 @@ export default function Assbook() {
   }, []);
 
   const startPost = useCallback(() => {
-    chooseView("everyone");
+    chooseView("feed");
     requestAnimationFrame(() => draftRef.current?.focus());
   }, [chooseView]);
 
@@ -236,11 +320,12 @@ export default function Assbook() {
 
   useAgentTools(
     useCallback((text: string) => {
-      setView("everyone");
+      setView("feed");
       setSearch("");
       setQuery("");
       setProfileHandle("");
       setPostId("");
+      setProfileTab("posts");
       setDraft(text);
       history.replaceState(null, "", "/");
       requestAnimationFrame(() => draftRef.current?.focus());
@@ -270,7 +355,7 @@ export default function Assbook() {
           });
           if (kind === "save") {
             toast.success(next ? "Saved for later." : "Removed from saved posts.");
-            if (!next && view === "saved") removePost(post.id);
+            if (!next && savedTab) removePost(post.id);
           }
         } catch (cause) {
           patchPost(post.id, rollback);
@@ -278,7 +363,7 @@ export default function Assbook() {
         }
       });
     },
-    [patchPost, removePost, requireUser, run, view],
+    [patchPost, removePost, requireUser, run, savedTab],
   );
 
   const like = useCallback((post: Post) => react(post, "like"), [react]);
@@ -304,7 +389,7 @@ export default function Assbook() {
               ? "You’re right behind " + person.name + "."
               : "You’re going your own way.",
           );
-          if (view === "following") revalidateFeed();
+          if (followingFeed) revalidateFeed();
         } catch (cause) {
           apply(next ? 0 : 1);
           throw cause;
@@ -313,12 +398,12 @@ export default function Assbook() {
     },
     [
       bumpFollowingCount,
+      followingFeed,
       patchPersonFollowing,
       patchProfileFollowing,
       requireUser,
       revalidateFeed,
       run,
-      view,
       viewerId,
     ],
   );
@@ -330,21 +415,35 @@ export default function Assbook() {
       patchPersonFollowing(person.id, following);
       patchProfileFollowing(person.id, following);
       bumpFollowingCount(viewerId, following ? 1 : -1);
-      if (view === "following") revalidateFeed();
+      if (followingFeed) revalidateFeed();
     },
     [
       bumpFollowingCount,
+      followingFeed,
       patchPersonFollowing,
       patchProfileFollowing,
       revalidateFeed,
-      view,
       viewerId,
     ],
   );
 
+  // Onboarding is done: the viewer, the feed and the rail are all a step
+  // behind the follows just made, and Following is finally worth reading.
+  const finishOnboarding = useCallback(() => {
+    setOnboardingClosed(true);
+    refreshViewer();
+    revalidateFeed();
+    revalidatePeople();
+    chooseFeedTab("following");
+    toast.success("Your Following feed is filling up.");
+  }, [chooseFeedTab, refreshViewer, revalidateFeed, revalidatePeople]);
+
   const submitPost = useCallback(() => {
     if (!requireUser()) return;
-    const staying = view === "everyone" && !query && !postId;
+    // Your own post does not show up in Following, so a post written there
+    // lands you back on Everyone, where you can actually see it.
+    const staying =
+      view === "feed" && feedTab === "everyone" && !query && !postId;
     void run("post", async () => {
       await api("posts", {
         method: "POST",
@@ -352,14 +451,27 @@ export default function Assbook() {
       });
       setDraft("");
       setPostImage(null);
-      setView("everyone");
+      setView("feed");
+      setFeedTab("everyone");
+      storeTab("everyone");
       setProfileHandle("");
+      setProfileTab("posts");
       setPostId("");
       history.replaceState(null, "", "/");
       if (staying) revalidateFeed();
       toast.success("Your post has landed. 🍑");
     });
-  }, [draft, postImage, postId, query, requireUser, revalidateFeed, run, view]);
+  }, [
+    draft,
+    feedTab,
+    postImage,
+    postId,
+    query,
+    requireUser,
+    revalidateFeed,
+    run,
+    view,
+  ]);
 
   const deletePost = useCallback(
     (post: Post) => {
@@ -440,7 +552,7 @@ export default function Assbook() {
     void run("logout", async () => {
       await api("logout", { method: "POST" });
       viewer.setUser(null);
-      chooseView("everyone");
+      chooseView("feed");
       toast.success("See you on the backside.");
     });
   }, [chooseView, run, viewer]);
@@ -451,6 +563,20 @@ export default function Assbook() {
     setSecurityNotice("");
   }, []);
 
+  // A member who has not been through onboarding gets the follow nudge: after
+  // signup once the welcome dialog is dismissed, and on any later visit. It
+  // waits its turn, so it never lands on top of the email confirmation or any
+  // other dialog that is already open, and once closed it stays closed for the
+  // rest of this page load.
+  const showOnboarding =
+    !!user &&
+    user.onboarded === false &&
+    !onboardingClosed &&
+    !modal &&
+    !infoModal &&
+    !welcomeEmail &&
+    !confirmation;
+
   const otherHandle =
     view === "profile" &&
     profileView.profile &&
@@ -458,13 +584,22 @@ export default function Assbook() {
       ? profileView.profile.handle
       : "";
 
-  const heading = viewHeading(view, profileView.profile?.name);
+  // A search or a single post is answered by everybody, so that is the tab
+  // the feed shows while one is open. The chosen tab is only parked, and comes
+  // back the moment the search is cleared.
+  const shownFeedTab =
+    view === "feed" && (query || singlePostId) ? "everyone" : feedTab;
+  const tab = view === "profile" ? profileTab : shownFeedTab;
+  const heading = viewHeading(view, tab, profileView.profile?.name);
+  const kicker = viewKicker(view, tab);
 
   return (
     <AppShell
       user={user}
-      view={view}
+      view={view === "profile" && !ownProfile ? "" : view}
       search={search}
+      searchPeople={peopleSearch.people}
+      searched={peopleSearch.searched}
       onSearch={onSearch}
       onChooseView={chooseView}
       onVisitProfile={visitProfile}
@@ -496,19 +631,19 @@ export default function Assbook() {
             onVisit={visitProfile}
             onFollow={follow}
             pending={pending}
-            onOpenAll={() => chooseView("people")}
+            onOpenAll={() => chooseView("community")}
           />
         </>
       }
     >
       <section className="intro">
         <div>
-          <div className="eyebrow">THE INTERNET’S OTHER SIDE</div>
+          {kicker && <div className="eyebrow">{kicker}</div>}
           <h1>
             {heading}
             <span aria-hidden="true">.</span>
           </h1>
-          <p>{viewBlurb(view)}</p>
+          <p>{viewBlurb(view, tab)}</p>
         </div>
         <span className="intro-stamp" aria-hidden="true">
           100%<small>cheeky</small>
@@ -519,6 +654,9 @@ export default function Assbook() {
         onChange={onSearch}
         variant="mobile"
         inputRef={mobileSearchRef}
+        people={peopleSearch.people}
+        searched={peopleSearch.searched}
+        onSelectPerson={visitProfile}
       />
       {viewer.error && (
         <div className="state-card" role="alert">
@@ -540,14 +678,15 @@ export default function Assbook() {
           onOpenSecurity={() => setModal("security")}
           onOpenFollowers={() => setFollowList("followers")}
           onOpenFollowing={() => setFollowList("following")}
-          onChooseView={chooseView}
+          tab={profileTab}
+          onTab={(next) => setProfileTab(next === "saved" ? "saved" : "posts")}
           onFollow={follow}
           followPending={pending.has(
             "follow:" + (profileView.profile?.id ?? ""),
           )}
         />
       )}
-      {view === "everyone" && !query && (
+      {view === "feed" && !query && !postId && (
         <Composer
           user={user}
           draft={draft}
@@ -562,7 +701,7 @@ export default function Assbook() {
           textareaRef={draftRef}
         />
       )}
-      {view === "people" ? (
+      {view === "community" ? (
         <PeopleView
           people={people.people}
           loading={people.loading}
@@ -574,7 +713,7 @@ export default function Assbook() {
         />
       ) : (
         <Feed
-          ownProfile={view === "profile" && (!profileHandle || profileHandle === user?.handle)}
+          ownProfile={ownProfile}
           posts={feed.posts}
           loading={feed.loading}
           updating={feed.updating}
@@ -584,6 +723,8 @@ export default function Assbook() {
           onRetry={retryFeed}
           onLoadMore={loadMore}
           view={view}
+          feedTab={shownFeedTab}
+          savedTab={savedTab}
           query={query}
           viewer={user}
           now={now}
@@ -591,9 +732,9 @@ export default function Assbook() {
           singlePostId={singlePostId}
           otherHandle={otherHandle}
           onExitSinglePost={exitSinglePost}
-          onChooseView={chooseView}
+          onFeedTab={chooseFeedTab}
           onCompose={startPost}
-          onFindPeople={() => chooseView("people")}
+          onFindPeople={() => chooseView("community")}
           onLike={like}
           onSave={save}
           onReplies={openReplies}
@@ -645,6 +786,13 @@ export default function Assbook() {
       {welcomeEmail && (
         <WelcomeDialog email={welcomeEmail} onClose={() => setWelcomeEmail("")} />
       )}
+      {showOnboarding && (
+        <FollowOnboardingDialog
+          onFollowed={syncFollow}
+          onDone={finishOnboarding}
+          onSkip={() => setOnboardingClosed(true)}
+        />
+      )}
       {confirmation && (
         <EmailConfirmedDialog
           state={confirmation}
@@ -683,6 +831,7 @@ export default function Assbook() {
             profileView.merge(fresh.id, {
               name: fresh.name,
               bio: fresh.bio,
+              link: fresh.link ?? null,
               avatar: fresh.avatar,
             });
             revalidateFeed();

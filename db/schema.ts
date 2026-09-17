@@ -20,6 +20,10 @@ export const users = sqliteTable("users", {
   authVersion: integer("auth_version").notNull().default(0),
   // Display names change at most once every 14 days.
   nameChangedAt: integer("name_changed_at"),
+  // Optional website shown on the profile. Always an http(s) URL.
+  link: text(),
+  // 1 once the new-member step (follow a few people) is complete.
+  onboarded: integer().notNull().default(0),
 }, (t) => [index("users_avatar").on(t.avatar)]);
 export const sessions = sqliteTable(
   "sessions",

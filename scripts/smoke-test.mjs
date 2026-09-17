@@ -125,6 +125,15 @@ try {
   await req(a, "profile", "PUT", { name: "Too soon" }, 400);
   await req(a, "profile", "PUT", { name: "Updated test", bio: "Still on." });
   assert.equal((await req(a, "me")).user.bio, "Still on.");
+  // Optional website link and the people typeahead.
+  await req(a, "profile", "PUT", { link: "not a url" }, 400);
+  await req(a, "profile", "PUT", { link: "https://example.com/pants" });
+  assert.equal((await req(anon, "profile/" + handles[0])).profile.link, "https://example.com/pants");
+  await req(a, "profile", "PUT", { link: "" });
+  assert.equal((await req(anon, "profile/" + handles[0])).profile.link, null);
+  const found = (await req(anon, "search/people?q=" + handles[0].slice(0, 6))).people;
+  assert.ok(found.some((x) => x.id === au.id), "Typeahead finds a handle prefix");
+  assert.equal((await req(anon, "search/people?q=")).people.length, 0);
   const image = await fetch(base + photo.url);
   assert.equal(image.status, 200);
   assert.equal(image.headers.get("content-type"), "image/png");
@@ -294,6 +303,22 @@ try {
     assert.equal(adminProfile.official, 1);
     assert.equal(adminProfile.posts_count, 1);
     pass("Official account cannot be blocked or reported; pins sit first in the main feed");
+    // Onboarding: the official account is suggested first, and "done" needs
+    // the required number of follows (3, or everyone while the site is small).
+    const fresh = { cookie: "" };
+    const freshHandle = "test_c_" + suffix;
+    handles.push(freshHandle);
+    await req(fresh, "signup", "POST", { name: "Local test c", handle: freshHandle, password, email: freshHandle + "@example.com", rules: true });
+    assert.equal((await req(fresh, "me")).user.onboarded, false);
+    const suggested = await req(fresh, "suggestions");
+    assert.equal(suggested.people[0].id, adminUser.id, "Official account is suggested first");
+    assert.ok(suggested.required >= 1 && suggested.required <= 3);
+    await req(fresh, "onboarding/done", "POST", {}, 400);
+    for (const person of suggested.people.slice(0, suggested.required)) await req(fresh, "follow/" + person.id, "PUT");
+    assert.equal((await req(fresh, "suggestions")).following, suggested.required);
+    await req(fresh, "onboarding/done", "POST", {});
+    assert.equal((await req(fresh, "me")).user.onboarded, true);
+    pass("Onboarding suggests the official account first and completes after the required follows");
     await req(a, "posts/" + later.id, "DELETE");
   } else console.log("SKIP moderator queue (set ASSBOOK_ADMIN_HANDLE and ADMIN_HANDLE in .dev.vars)");
   await req(a, "posts/" + p.id, "DELETE");

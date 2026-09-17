@@ -24,6 +24,8 @@ import {
   deleteUnusedUpload,
   background,
   adminHandle,
+  creatorHandle,
+  ONBOARDING_FOLLOWS,
   HttpError,
 } from "@/lib/server";
 export const dynamic = "force-dynamic";
@@ -35,8 +37,10 @@ const postSelect =
   "SELECT p.id,p.user_id,p.body,p.image,p.created,p.pinned,u.handle,u.name,u.avatar,u.demo,(u.handle=?) official,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE ";
 // One person row. Binds: the official handle, then the viewer id.
 const personSelect =
-  "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,(u.handle=?) official,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u ";
+  "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,(u.handle=?) official,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u ";
 const writePaths = [
+  "suggestions",
+  "onboarding",
   "upload",
   "profile",
   "posts",
@@ -170,6 +174,27 @@ async function handle(req: Request) {
         ).results,
       });
     }
+    if (path[0] === "search" && path[1] === "people" && method === "GET") {
+      // Typeahead for the search box: names and handles, best matches first.
+      await readLimit(req, "search", 60);
+      const q = (url.searchParams.get("q") ?? "").trim().slice(0, 40);
+      if (q.length < 1) return json({ people: [] });
+      const like = "%" + escapeLike(q.toLowerCase()) + "%";
+      const prefix = escapeLike(q.toLowerCase()) + "%";
+      return json({
+        people: (
+          await db()
+            .prepare(
+              personSelect +
+                "WHERE (lower(u.name) LIKE ? ESCAPE '\\' OR u.handle LIKE ? ESCAPE '\\') AND " +
+                blockClause +
+                " ORDER BY CASE WHEN u.handle LIKE ? ESCAPE '\\' OR lower(u.name) LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END,u.demo ASC,u.name COLLATE NOCASE LIMIT 8",
+            )
+            .bind(adminHandle(), uid, like, like, uid, uid, prefix, prefix)
+            .all()
+        ).results,
+      });
+    }
     if (path[0] === "profile" && method === "GET" && ["followers", "following"].includes(path[2] ?? "")) {
       await readLimit(req, "api", 120);
       if (!/^[a-z0-9_]{3,24}$/.test(path[1] ?? ""))
@@ -198,7 +223,7 @@ async function handle(req: Request) {
         throw new HttpError(404, "This profile is unavailable.");
       const u = await db()
         .prepare(
-          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,(u.handle=?) official,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,(SELECT count(*) FROM follows f WHERE f.user_id=u.id) following_count,(SELECT count(*) FROM posts p WHERE p.user_id=u.id AND p.deleted=0) posts_count,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND " +
+          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,(u.handle=?) official,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,(SELECT count(*) FROM follows f WHERE f.user_id=u.id) following_count,(SELECT count(*) FROM posts p WHERE p.user_id=u.id AND p.deleted=0) posts_count,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND " +
             blockClause,
         )
         .bind(adminHandle(), uid, path[1], uid, uid)
@@ -267,6 +292,50 @@ async function handle(req: Request) {
     if (!writePaths.includes(path[0])) throw new HttpError(404, "Not found.");
     const user = await requireUser(req);
     await rate("write:" + user.id, 40);
+    if (path[0] === "suggestions" && method === "GET") {
+      // Who a new member should follow: the official account, the creator,
+      // then everyone else by followers. Real accounts only, nobody already
+      // followed, nobody blocked either way.
+      const people = (
+        await db()
+          .prepare(
+            personSelect +
+              "WHERE u.id!=? AND u.demo=0 AND NOT EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) AND " +
+              blockClause +
+              " ORDER BY CASE WHEN u.handle=? THEN 0 WHEN u.handle=? THEN 1 ELSE 2 END,followers DESC,u.created ASC LIMIT 12",
+          )
+          .bind(adminHandle(), user.id, user.id, user.id, user.id, user.id, adminHandle(), creatorHandle())
+          .all()
+      ).results;
+      const available = await db()
+        .prepare("SELECT count(*) n FROM users u WHERE u.id!=? AND u.demo=0 AND " + blockClause)
+        .bind(user.id, user.id, user.id)
+        .first<{ n: number }>();
+      const following = await db()
+        .prepare("SELECT count(*) n FROM follows WHERE user_id=?")
+        .bind(user.id)
+        .first<{ n: number }>();
+      return json({
+        people,
+        required: Math.min(ONBOARDING_FOLLOWS, available?.n ?? 0),
+        following: following?.n ?? 0,
+      });
+    }
+    if (path[0] === "onboarding" && path[1] === "done" && method === "POST") {
+      const available = await db()
+        .prepare("SELECT count(*) n FROM users u WHERE u.id!=? AND u.demo=0 AND " + blockClause)
+        .bind(user.id, user.id, user.id)
+        .first<{ n: number }>();
+      const following = await db()
+        .prepare("SELECT count(*) n FROM follows WHERE user_id=?")
+        .bind(user.id)
+        .first<{ n: number }>();
+      const required = Math.min(ONBOARDING_FOLLOWS, available?.n ?? 0);
+      if ((following?.n ?? 0) < required)
+        throw new HttpError(400, "Follow " + required + " people to get going.");
+      await db().prepare("UPDATE users SET onboarded=1 WHERE id=?").bind(user.id).run();
+      return json({ ok: true });
+    }
     if (path[0] === "upload" && method === "POST") {
       await rate("upload:" + user.id, 10, 3600000);
       if (req.headers.get("x-photo-rules") !== "accepted")
@@ -322,6 +391,14 @@ async function handle(req: Request) {
       let name = d.name === undefined ? null : str(d.name, 40, 1);
       if (name === user.name) name = null;
       const bio = d.bio === undefined ? null : str(d.bio, 160);
+      // Optional website: empty clears it, otherwise it must be an http(s) URL.
+      const setLink = "link" in d;
+      let link: string | null = null;
+      if (setLink && d.link != null && d.link !== "") {
+        link = str(d.link, 200);
+        if (!/^https?:\/\/[^\s<>"']+$/i.test(link))
+          throw new HttpError(400, "Links need to start with https:// (or http://).");
+      }
       const setAvatar = "avatar" in d;
       const avatar = setAvatar ? await ownImage(d.avatar, user.id) : null;
       // A display name changes at most once every 14 days.
@@ -334,9 +411,9 @@ async function handle(req: Request) {
         );
       await db()
         .prepare(
-          "UPDATE users SET name=COALESCE(?,name),name_changed_at=CASE WHEN ? IS NULL THEN name_changed_at ELSE ? END,bio=COALESCE(?,bio),avatar=CASE WHEN ? THEN ? ELSE avatar END WHERE id=?",
+          "UPDATE users SET name=COALESCE(?,name),name_changed_at=CASE WHEN ? IS NULL THEN name_changed_at ELSE ? END,bio=COALESCE(?,bio),link=CASE WHEN ? THEN ? ELSE link END,avatar=CASE WHEN ? THEN ? ELSE avatar END WHERE id=?",
         )
-        .bind(name, name, Date.now(), bio, setAvatar ? 1 : 0, avatar, user.id)
+        .bind(name, name, Date.now(), bio, setLink ? 1 : 0, link, setAvatar ? 1 : 0, avatar, user.id)
         .run();
       const previous = photoId(user.avatar);
       if (setAvatar && previous && user.avatar !== avatar)

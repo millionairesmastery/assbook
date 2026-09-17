@@ -43,6 +43,20 @@
       "when": 1789639707131,
       "tag": "0005_flowery_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789640864225,
+      "tag": "0006_strong_greymalkin",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789641170696,
+      "tag": "0007_massive_rage",
+      "breakpoints": true
     }
   ]
 }

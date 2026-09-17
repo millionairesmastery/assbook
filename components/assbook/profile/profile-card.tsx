@@ -1,9 +1,15 @@
 "use client";
-import { CalendarDays, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  CalendarDays,
+  Link as LinkIcon,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar } from "@/components/assbook/avatar";
 import { OfficialBadge } from "@/components/assbook/official-badge";
-import { joined, plural } from "@/lib/format";
+import { joined, linkLabel, plural, webLink } from "@/lib/format";
 import type { Profile } from "@/lib/types";
 
 export function ProfileCard({
@@ -16,7 +22,8 @@ export function ProfileCard({
   onOpenSecurity,
   onOpenFollowers,
   onOpenFollowing,
-  onChooseView,
+  tab,
+  onTab,
   onFollow,
   followPending,
 }: {
@@ -29,7 +36,9 @@ export function ProfileCard({
   onOpenSecurity: () => void;
   onOpenFollowers: () => void;
   onOpenFollowing: () => void;
-  onChooseView: (view: string) => void;
+  /** "posts" or "saved", on your own profile only. */
+  tab: string;
+  onTab: (tab: string) => void;
   onFollow: (person: Profile) => void;
   followPending: boolean;
 }) {
@@ -55,6 +64,7 @@ export function ProfileCard({
   if (!profile) return null;
 
   const isMe = viewer?.id === profile.id;
+  const link = webLink(profile.link);
   const posts = profile.posts_count ?? 0;
   const followers = profile.followers ?? 0;
   const following = profile.following_count ?? 0;
@@ -64,8 +74,8 @@ export function ProfileCard({
       <div className="profile-top">
         <Avatar person={profile} large />
         <div className="profile-identity">
-          <h2>
-            {profile.name}
+          <h2 className="name-line">
+            <span className="name-wrap">{profile.name}</span>
             {profile.official === 1 && <OfficialBadge />}
             {profile.demo === 1 && <span className="tiny-badge">SAMPLE</span>}
           </h2>
@@ -101,6 +111,14 @@ export function ProfileCard({
       <p className="profile-bio">
         {profile.bio || "Still finding the right words."}
       </p>
+      {link && (
+        <p className="profile-link">
+          <LinkIcon size={14} aria-hidden="true" />
+          <a href={link} target="_blank" rel="noopener nofollow ugc">
+            {linkLabel(link)}
+          </a>
+        </p>
+      )}
       <p className="profile-joined">
         <CalendarDays size={14} aria-hidden="true" />
         {joined(profile.created)}
@@ -143,20 +161,16 @@ export function ProfileCard({
         </button>
       </div>
       {isMe ? (
-        <Tabs
-          className="profile-tabs"
-          value="profile"
-          onValueChange={onChooseView}
-        >
+        <Tabs className="profile-tabs" value={tab} onValueChange={onTab}>
           <TabsList variant="line" aria-label="Your posts and saved posts">
-            <TabsTrigger value="profile">Posts</TabsTrigger>
+            <TabsTrigger value="posts">Posts</TabsTrigger>
             <TabsTrigger value="saved">Saved</TabsTrigger>
           </TabsList>
         </Tabs>
       ) : (
-        <Tabs className="profile-tabs" value="profile">
+        <Tabs className="profile-tabs" value="posts">
           <TabsList variant="line" aria-label={"Posts by " + profile.name}>
-            <TabsTrigger value="profile">Posts</TabsTrigger>
+            <TabsTrigger value="posts">Posts</TabsTrigger>
           </TabsList>
         </Tabs>
       )}

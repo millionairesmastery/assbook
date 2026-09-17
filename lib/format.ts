@@ -18,6 +18,18 @@ export function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many;
 }
 
+// A profile link, but only if it is really a web address. Anything else (an
+// old row, a scheme we do not want to hand to the browser) comes back empty.
+export function webLink(link?: string | null): string {
+  const url = (link ?? "").trim();
+  return /^https?:\/\/[^\s<>"']+$/i.test(url) ? url : "";
+}
+
+// "assbook.app/about": the same address, without the parts nobody reads.
+export function linkLabel(link: string): string {
+  return link.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+}
+
 // "Joined March 2026" for a profile header. Seeded sample accounts carry a
 // placeholder timestamp, so they get a gentler line instead of 1970.
 export function joined(time: number): string {

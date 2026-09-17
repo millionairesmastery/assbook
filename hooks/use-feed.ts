@@ -5,7 +5,8 @@ import { api, errorMessage, isAbortError } from "@/lib/api-client";
 import type { FeedCursor, FeedResponse, Post } from "@/lib/types";
 
 export type FeedParams = {
-  view: string;
+  /** What the server should filter by: everyone, following, saved or profile. */
+  filter: string;
   query: string;
   profileTarget: string;
   singlePostId: string;
@@ -22,7 +23,7 @@ type FeedData = {
 
 function feedKey(p: FeedParams): string {
   return JSON.stringify([
-    p.view,
+    p.filter,
     p.query,
     p.profileTarget,
     p.singlePostId,
@@ -31,14 +32,14 @@ function feedKey(p: FeedParams): string {
 }
 
 function feedPath(
-  view: string,
+  filter: string,
   query: string,
   profileTarget: string,
   singlePostId: string,
   cursor: FeedCursor | null,
 ): string {
   const search = new URLSearchParams();
-  search.set("filter", view);
+  search.set("filter", filter);
   if (query) search.set("q", query);
   if (profileTarget) search.set("profile", profileTarget);
   if (singlePostId) search.set("post", singlePostId);
@@ -63,7 +64,7 @@ function isOlder(post: Post, cursor: FeedCursor): boolean {
  * away pages somebody already scrolled through.
  */
 export function useFeed(params: FeedParams) {
-  const { view, query, profileTarget, singlePostId, ready } = params;
+  const { filter, query, profileTarget, singlePostId, ready } = params;
   const key = feedKey(params);
   const [data, setData] = useState<FeedData | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(
@@ -76,7 +77,7 @@ export function useFeed(params: FeedParams) {
   useEffect(() => {
     if (!ready) return;
     const controller = new AbortController();
-    api<FeedResponse>(feedPath(view, query, profileTarget, singlePostId, null), {
+    api<FeedResponse>(feedPath(filter, query, profileTarget, singlePostId, null), {
       signal: controller.signal,
     })
       .then((page) => {
@@ -93,7 +94,7 @@ export function useFeed(params: FeedParams) {
         setFailure({ key, message: errorMessage(cause) });
       });
     return () => controller.abort();
-  }, [key, ready, attempt, view, query, profileTarget, singlePostId]);
+  }, [key, ready, attempt, filter, query, profileTarget, singlePostId]);
 
   const matched = data && data.key === key ? data : null;
   const errored = failure && failure.key === key ? failure.message : "";
@@ -108,7 +109,7 @@ export function useFeed(params: FeedParams) {
   const revalidate = useCallback(() => {
     if (!ready) return;
     setUpdating(true);
-    api<FeedResponse>(feedPath(view, query, profileTarget, singlePostId, null))
+    api<FeedResponse>(feedPath(filter, query, profileTarget, singlePostId, null))
       .then((fresh) => {
         setData((current) => {
           const base: FeedData = {
@@ -137,14 +138,14 @@ export function useFeed(params: FeedParams) {
         if (!isAbortError(cause)) toast.error(errorMessage(cause));
       })
       .finally(() => setUpdating(false));
-  }, [key, ready, view, query, profileTarget, singlePostId]);
+  }, [key, ready, filter, query, profileTarget, singlePostId]);
 
   const loadMore = useCallback(() => {
     const cursor = matched?.next;
     if (loadingMore || !cursor || !matched?.hasMore) return;
     setLoadingMore(true);
     api<FeedResponse>(
-      feedPath(view, query, profileTarget, singlePostId, cursor),
+      feedPath(filter, query, profileTarget, singlePostId, cursor),
     )
       .then((page) => {
         setData((current) => {
@@ -165,7 +166,7 @@ export function useFeed(params: FeedParams) {
         if (!isAbortError(cause)) toast.error(errorMessage(cause));
       })
       .finally(() => setLoadingMore(false));
-  }, [key, loadingMore, matched, view, query, profileTarget, singlePostId]);
+  }, [key, loadingMore, matched, filter, query, profileTarget, singlePostId]);
 
   const patchPost = useCallback((id: string, patch: Partial<Post>) => {
     setData((current) =>

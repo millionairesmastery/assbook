@@ -735,7 +735,23 @@ h2 {
   text-align: left;
   min-width: 0;
 }
-.person-name b,
+/* A name and the marks that belong to it: the name gives way, the badges
+   stay whole and stay on the line. */
+.name-line {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.name-line > .tiny-badge {
+  flex-shrink: 0;
+}
 .person-name .person-meta {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1241,14 +1257,24 @@ h2 {
   color: #c94120;
 }
 
-/* The one account that speaks for Assbook itself. */
+/* The one account that speaks for Assbook itself: a small round check that
+   sits next to the name and explains itself in a tooltip. */
 .official-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  vertical-align: middle;
-  background: #eaf0fc;
-  color: #294a8b;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  margin-left: 4px;
+  background: #214cd8;
+  color: #fff;
+  vertical-align: -4px;
+  cursor: help;
+}
+.official-badge:focus-visible {
+  outline: 3px solid #c94120;
+  outline-offset: 2px;
 }
 
 /* A post a moderator parked at the top of the feed. */
@@ -1474,10 +1500,183 @@ button.stat:hover {
   }
 }
 
+/* The Follow button never gives up room to a long name. */
+.follow-button {
+  flex-shrink: 0;
+}
+/* A profile name is allowed to wrap: it has the room, and nothing sits
+   beside it that a long one could push into. */
+.profile-header h2.name-line {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.name-wrap {
+  overflow-wrap: anywhere;
+}
+
+/* One optional link on a profile, without the parts nobody reads. */
+.profile-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 0 0;
+  font-size: 13px;
+  color: #5f6b75;
+  min-width: 0;
+}
+.profile-link a {
+  color: #c94120;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.profile-link a:hover {
+  text-decoration: underline;
+}
+
+/* People matching what you are typing, right under the field. */
+.searchbox,
+.mobile-search {
+  position: relative;
+}
+.typeahead {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 25;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  box-shadow: 0 12px 28px rgba(34, 39, 43, 0.14);
+  max-height: 340px;
+  overflow-y: auto;
+}
+.typeahead-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 9px;
+  border-radius: 9px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.typeahead-row.is-active,
+.typeahead-row:hover {
+  background: #fff0e8;
+}
+.typeahead-row .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 21px;
+  border-radius: 10px;
+}
+.typeahead-text {
+  display: block;
+  min-width: 0;
+  color: var(--foreground);
+}
+.typeahead-text b {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  min-width: 0;
+}
+.typeahead-text .person-meta {
+  margin-top: 1px;
+}
+.typeahead-bio {
+  display: block;
+  font-size: 12px;
+  color: #5f6b75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+.typeahead-empty {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: #5f6b75;
+}
+
 /* Seven targets on the smallest phones: keep 44px and give back the padding. */
 @media (max-width: 380px) {
   .mobile-nav {
     padding-left: 2px;
     padding-right: 2px;
+  }
+}
+
+/* The new member nudge: a scrollable shortlist of people to follow, a live
+   count, and a quiet way out that leaves onboarding for next time. */
+.onboard-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 44svh;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.onboard-person {
+  border-bottom: 1px solid #f1f3f6;
+}
+.onboard-person:last-child {
+  border-bottom: 0;
+}
+.onboard-person .person {
+  margin: 12px 0 0;
+}
+.onboard-bio {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #5f6b75;
+  margin: 3px 0 12px 46px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.onboard-person:not(:has(.onboard-bio)) .person {
+  margin-bottom: 12px;
+}
+/* The dialog has room for words even when the rail does not, and "Follow" or
+   "Following" in full is the whole point of this screen. */
+.onboard-list .follow-button span {
+  display: inline;
+}
+.onboard-progress {
+  font-size: 13px;
+  font-weight: 600;
+  color: #5f6b75;
+}
+.onboard-skip {
+  align-self: center;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #6b7681;
+  padding: 8px 12px;
+  margin-top: -8px;
+}
+.onboard-skip:hover {
+  color: #c94120;
+  background: #fff0e8;
+}
+@media (max-width: 650px) {
+  .onboard-list {
+    max-height: 40svh;
+  }
+  .onboard-list .follow-button {
+    min-height: 44px;
+  }
+  .onboard-skip {
+    min-height: 44px;
   }
 }

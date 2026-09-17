@@ -26,6 +26,7 @@ export function EditProfileDialog({
 }) {
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio);
+  const [link, setLink] = useState(user.link ?? "");
   const [avatar, setAvatar] = useState<string | null>(user.avatar);
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -43,6 +44,8 @@ export function EditProfileDialog({
       const patch: Record<string, unknown> = {};
       if (name !== user.name) patch.name = name;
       if (bio !== user.bio) patch.bio = bio;
+      // An empty field is how you take the website back off again.
+      if (link.trim() !== (user.link ?? "")) patch.link = link.trim();
       if (avatar !== user.avatar) patch.avatar = avatar;
       if (Object.keys(patch).length) await api("profile", { method: "PUT", body: patch });
       const fresh = await api<{ user: Profile }>("me");
@@ -132,6 +135,19 @@ export function EditProfileDialog({
                 placeholder="Tell us a little about the person in the pants."
                 {...bioCounter.handlers}
               />
+            </label>
+            <label>
+              Website
+              <input
+                type="url"
+                value={link}
+                onChange={(event) => setLink(event.target.value)}
+                maxLength={200}
+                placeholder="https://"
+              />
+              <span className="small muted">
+                Optional. One link, shown on your profile.
+              </span>
             </label>
             <button className="primary" disabled={busy}>
               {busy && <Loader2 className="spin" size={15} aria-hidden="true" />}

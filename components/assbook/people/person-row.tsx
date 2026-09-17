@@ -17,8 +17,8 @@ export function PersonRow({
 }) {
   const identity = (
     <>
-      <b>
-        {person.name}
+      <b className="name-line">
+        <span className="name-text">{person.name}</span>
         {person.official === 1 && <OfficialBadge />}
       </b>
       <span className="person-meta">@{person.handle}</span>

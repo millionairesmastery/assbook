@@ -22,9 +22,9 @@ export function PeopleView({
   pending: ReadonlySet<string>;
 }) {
   return (
-    <section className="people-view" aria-label="The community">
+    <section className="people-view" aria-label="Community">
       <div className="feed-toolbar">
-        <h2>The community</h2>
+        <h2>Community</h2>
         <span>EVERYONE HERE ↓</span>
       </div>
       {error ? (

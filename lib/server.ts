@@ -22,6 +22,15 @@ export function bucket() {
 export function adminHandle() {
   return (env.ADMIN_HANDLE ?? "").trim().toLowerCase();
 }
+// The person who made the site, suggested second to new members.
+export function creatorHandle() {
+  return String((env as { CREATOR_HANDLE?: string }).CREATOR_HANDLE ?? "")
+    .trim()
+    .toLowerCase();
+}
+// New members follow this many people before they are done onboarding, or as
+// many as exist while the community is still tiny.
+export const ONBOARDING_FOLLOWS = 3;
 // Runs work after the response is sent. Errors are logged, never thrown.
 export function background(task: Promise<unknown>) {
   const guarded = task.catch((e) =>
@@ -181,19 +190,20 @@ export async function viewer(req: Request) {
   if (!/^[a-f0-9-]{72}$/.test(token)) return null;
   const user = await db()
     .prepare(
-      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,u.name_changed_at FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND s.auth_version=u.auth_version",
+      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.link,u.demo,u.created,u.name_changed_at,u.onboarded FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND s.auth_version=u.auth_version",
     )
     .bind(await hash(token), Date.now())
-    .first<Profile & { name_changed_at: number | null }>();
+    .first<Omit<Profile, "onboarded"> & { name_changed_at: number | null; onboarded: number }>();
   if (!user) return null;
   const admin = adminHandle();
-  const { name_changed_at, ...profile } = user;
+  const { name_changed_at, onboarded, ...profile } = user;
   const lockedUntil = name_changed_at ? name_changed_at + NAME_COOLDOWN_MS : 0;
   return {
     ...profile,
     official: !!admin && user.handle === admin ? 1 : 0,
     isAdmin: !!admin && user.handle === admin,
     nameLockedUntil: lockedUntil > Date.now() ? lockedUntil : null,
+    onboarded: onboarded === 1,
   };
 }
 export async function requireUser(req: Request) {

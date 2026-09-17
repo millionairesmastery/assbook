@@ -30,6 +30,7 @@
   "ai": { "binding": "AI" },
   "vars": {
     "PHOTO_CHECK": "on",
+    "CREATOR_HANDLE": "",
     "ADMIN_HANDLE": "",
     "APP_ORIGIN": "https://your-assbook.example",
     "EMAIL_FROM": "accounts@your-assbook.example"
