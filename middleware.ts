@@ -3,10 +3,12 @@ import { NextResponse } from "next/server";
 // lib/server.ts, and photos carry a sandboxing policy of their own.
 // React needs eval() for its development-only debugging features. Production
 // never gets it.
+// Cloudflare Web Analytics (cookie-free) is injected by the zone, so its
+// beacon script and endpoint are allowed.
 const scriptSrc =
   process.env.NODE_ENV === "production"
-    ? "script-src 'self' 'unsafe-inline'"
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+    ? "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com";
 export function middleware() {
   const res = NextResponse.next();
   res.headers.set(
@@ -16,7 +18,7 @@ export function middleware() {
       scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
-      "connect-src 'self'",
+      "connect-src 'self' https://cloudflareinsights.com",
       "worker-src 'self' blob:",
       "font-src 'self'",
       "frame-ancestors 'none'",

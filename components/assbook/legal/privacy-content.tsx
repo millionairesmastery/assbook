@@ -22,8 +22,10 @@ export function PrivacyContent() {
       <p>
         <strong>Technical data.</strong> Your IP address is used for rate
         limiting and abuse prevention and appears in short-lived server logs. A
-        session cookie keeps you signed in for seven days. We do not use
-        advertising or analytics trackers.
+        session cookie keeps you signed in for seven days. We use Cloudflare
+        Web Analytics for aggregate visit statistics (pages, countries, devices,
+        referrers); it sets no cookies and does not identify you. We do not use
+        advertising trackers.
       </p>
       <h2>Photos and the automatic check</h2>
       <p>
