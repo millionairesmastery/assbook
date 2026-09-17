@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { env } from "cloudflare:workers";
 import "./globals.css";
+import { ReloadOnStaleChunk } from "@/components/assbook/reload-on-stale-chunk";
 const description =
   "Good people. Bad puns. Great jeans. A small social network with one ridiculous rule: your profile photo is your own fully clothed behind.";
 function origin() {
@@ -36,7 +37,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ReloadOnStaleChunk />
+        {children}
+      </body>
     </html>
   );
 }

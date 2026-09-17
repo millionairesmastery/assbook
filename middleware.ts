@@ -38,6 +38,9 @@ export function middleware() {
     "Strict-Transport-Security",
     "max-age=15552000; includeSubDomains",
   );
+  // Pages depend on the session cookie. The framework already marks them
+  // no-store; this only makes the dependency explicit to caches.
+  res.headers.set("Vary", "Cookie");
   return res;
 }
 export const config = { matcher: ["/((?!api/|_next/).*)"] };
