@@ -4,8 +4,9 @@ export function PrivacyContent() {
     <>
       <p>
         This notice explains what Assbook collects, why, and what happens to it.
-        Assbook is operated from Serbia and hosted on Cloudflare. If something
-        here is unclear, write to hello@assbook.app.
+        Assbook is run by its founders and hosted on Cloudflare; the operating
+        company will be named here once it is registered. If something here is
+        unclear, write to hello@assbook.app.
       </p>
       <h2>What we collect</h2>
       <p>

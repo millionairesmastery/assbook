@@ -65,9 +65,10 @@ export function TermsContent() {
       </p>
       <h2>9. Governing law</h2>
       <p>
-        These terms are governed by the laws of Serbia, and disputes go to the
-        courts there, without affecting mandatory consumer protections where
-        you live.
+        These terms are governed by the laws of the country where the Assbook
+        operating company is established, which will be named here once it is
+        registered, without affecting mandatory consumer protections where you
+        live.
       </p>
       <h2>10. Contact</h2>
       <p>
