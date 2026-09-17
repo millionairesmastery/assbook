@@ -12,7 +12,6 @@ export function Composer({
   image,
   onRemoveImage,
   onAddPhoto,
-  onAddPeek,
   onSubmit,
   submitting,
   textareaRef,
@@ -23,7 +22,6 @@ export function Composer({
   image: string | null;
   onRemoveImage: () => void;
   onAddPhoto: () => void;
-  onAddPeek: () => void;
   onSubmit: () => void;
   submitting: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -72,13 +70,18 @@ export function Composer({
           <ImagePlus size={18} aria-hidden="true" />
           Photo
         </button>
+        {/* Peeks have their own strip and floating button. Video posts do not
+            exist yet; the grey button says so without going anywhere. */}
         <button
-          className="quiet"
-          onClick={onAddPeek}
-          aria-label="Post a peek, five seconds of your day"
+          type="button"
+          className="quiet compose-soon"
+          disabled
+          aria-label="Video posts, coming soon"
+          title="Video posts are coming soon"
         >
           <Video size={18} aria-hidden="true" />
-          Peek
+          Video
+          <small>soon</small>
         </button>
         <span>
           {draft.length

@@ -1032,7 +1032,6 @@ export default function Assbook({
             onAddPhoto={() => {
               if (requireUser()) setModal("upload");
             }}
-            onAddPeek={openPostPeek}
             onSubmit={submitPost}
             submitting={pending.has("post")}
             textareaRef={draftRef}
