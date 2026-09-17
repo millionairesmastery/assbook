@@ -84,14 +84,25 @@ async function handle(req: Request) {
       const clauses = ["p.deleted=0", blockClause];
       const args: (string | number)[] = [adminHandle(), uid, uid, uid, uid, uid, uid];
       const single = url.searchParams.get("post");
-      // Pinned posts are the welcome for newcomers: on page one of the
-      // Everyone and Following tabs they come first for visitors and for
-      // members in their first day, whoever they follow. After that they
-      // sit in the timeline like any other post.
-      const newcomer = !me || me.created > Date.now() - 86400000;
+      // Pinned posts are the welcome for newcomers. They come first on page
+      // one of the Everyone and Following tabs until the member has finished
+      // the follow step and seen their feed once; that first feed after
+      // onboarding is the last time. Visitors (shared links) always get them
+      // first. Afterwards pinned posts sit in the timeline like any other.
+      const status = me
+        ? await db()
+            .prepare("SELECT onboarded,welcomed FROM users WHERE id=?")
+            .bind(me.id)
+            .first<{ onboarded: number; welcomed: number }>()
+        : null;
+      const newcomer = !status || !status.onboarded || !status.welcomed;
       const mainFeed =
         newcomer && ["everyone", "following"].includes(filter) && !q && !profile && !single;
       if (mainFeed) clauses.push("p.pinned=0");
+      if (mainFeed && !before && status && status.onboarded && !status.welcomed)
+        background(
+          db().prepare("UPDATE users SET welcomed=1 WHERE id=?").bind(me!.id).run(),
+        );
       if (filter === "following") {
         clauses.push(
           "EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id)",

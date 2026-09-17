@@ -43,14 +43,6 @@ async function req(
   assert.equal(res.status, expected, path + ": " + JSON.stringify(json));
   return json;
 }
-function sqlLocal(sql) {
-  const r = spawnSync(
-    process.execPath,
-    ["--import", "./scripts/sites-env.mjs", "./node_modules/wrangler/bin/wrangler.js", "d1", "execute", "DB", "--local", "--config", "wrangler.jsonc", "--persist-to", ".wrangler/state", "--command", sql],
-    { stdio: "pipe" },
-  );
-  if (r.status !== 0) throw new Error("local SQL failed: " + sql);
-}
 let passed = 0;
 function pass(label) {
   console.log("PASS " + label);
@@ -313,11 +305,6 @@ try {
     const followingPin = (await req(b, "feed?filter=following")).posts;
     assert.equal(followingPin[0]?.id, welcome.id, "Pinned post tops the Following tab for a newcomer");
     assert.equal(followingPin.filter((x) => x.id === welcome.id).length, 1);
-    // A member past their first day sees the pinned post in its normal place.
-    sqlLocal("UPDATE users SET created=" + (Date.now() - 2 * 86400000) + " WHERE handle='" + handles[0] + "'");
-    const settled = (await req(a, "feed")).posts;
-    assert.equal(settled[0]?.id, later.id, "Settled members see the timeline order");
-    assert.ok(settled.some((x) => x.id === welcome.id), "The pinned post is still in the feed");
     assert.equal((await req(admin, "admin/pin/" + welcome.id, "POST", {})).pinned, false);
     await req(a, "admin/pin/" + welcome.id, "POST", {}, 403);
     const adminProfile = (await req(anon, "profile/" + adminUser.handle)).profile;
@@ -339,6 +326,14 @@ try {
     assert.equal((await req(fresh, "suggestions")).following, suggested.required);
     await req(fresh, "onboarding/done", "POST", {});
     assert.equal((await req(fresh, "me")).user.onboarded, true);
+    await req(admin, "admin/pin/" + welcome.id, "POST", {});
+    const firstFeed = (await req(fresh, "feed")).posts;
+    assert.equal(firstFeed[0]?.id, welcome.id, "The first feed after onboarding starts with the welcome");
+    await new Promise((r) => setTimeout(r, 300));
+    const secondFeed = (await req(fresh, "feed")).posts;
+    assert.equal(secondFeed[0]?.id, later.id, "From the second feed on, timeline order");
+    assert.ok(secondFeed.some((x) => x.id === welcome.id), "The welcome post is still in the feed");
+    await req(admin, "admin/pin/" + welcome.id, "POST", {});
     pass("Onboarding suggests the official account first and completes after the required follows");
     await req(a, "posts/" + later.id, "DELETE");
   } else console.log("SKIP moderator queue (set ASSBOOK_ADMIN_HANDLE and ADMIN_HANDLE in .dev.vars)");

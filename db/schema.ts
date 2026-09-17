@@ -24,6 +24,8 @@ export const users = sqliteTable("users", {
   link: text(),
   // 1 once the new-member step (follow a few people) is complete.
   onboarded: integer().notNull().default(0),
+  // 1 once the member has seen the pinned welcome at the top of their feed.
+  welcomed: integer().notNull().default(0),
 }, (t) => [index("users_avatar").on(t.avatar)]);
 export const sessions = sqliteTable(
   "sessions",

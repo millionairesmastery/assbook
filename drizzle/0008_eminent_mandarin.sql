@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `welcomed` integer DEFAULT 0 NOT NULL;
