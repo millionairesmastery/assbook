@@ -253,7 +253,7 @@ export function AppShell({
         {user && onPostPeek && (
           <button
             className="peek-fab"
-            aria-label="Post a peek, five seconds of your day"
+            aria-label="Post a peek, ten seconds of your day"
             onClick={onPostPeek}
           >
             <Video size={20} aria-hidden="true" />

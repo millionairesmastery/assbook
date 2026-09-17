@@ -26,9 +26,12 @@ import {
   uploadPhoto,
 } from "@/lib/api-client";
 
-const CLIP_MS = 5000;
-const MAX_SECONDS = 5.5;
-const MAX_BYTES = 8 * 1024 * 1024;
+const CLIP_MS = 10000;
+const MAX_SECONDS = 10.5;
+const MAX_BYTES = 16 * 1024 * 1024;
+// Keeps ten seconds from a phone camera a few megabytes, not sixteen.
+const VIDEO_BPS = 2_500_000;
+const AUDIO_BPS = 96_000;
 // The frame goes through the photo check. Smaller is faster there, and the
 // model reads a 960 pixel still as well as a bigger one.
 const FRAME_EDGE = 960;
@@ -189,7 +192,7 @@ function readDuration(url: string): Promise<number> {
 }
 
 /**
- * Five seconds, two ways in: the camera or a file. Whichever it is, a still
+ * Ten seconds, two ways in: the camera or a file. Whichever it is, a still
  * from the clip goes through the dress-code check first, and a refusal there
  * is a refusal for the whole thing.
  */
@@ -299,7 +302,11 @@ export function PostPeekDialog({
     const cropped = preview.current ? portraitSource(preview.current, stream) : null;
     let made: MediaRecorder;
     try {
-      made = new MediaRecorder(cropped ? cropped.stream : stream, { mimeType: type });
+      made = new MediaRecorder(cropped ? cropped.stream : stream, {
+        mimeType: type,
+        videoBitsPerSecond: VIDEO_BPS,
+        audioBitsPerSecond: AUDIO_BPS,
+      });
     } catch {
       cropped?.stop();
       setError("This browser will not record here. Choose a clip instead.");
@@ -319,7 +326,7 @@ export function PostPeekDialog({
       const blob = new Blob(parts, { type });
       setStream(null);
       if (blob.size > MAX_BYTES) {
-        setError("That clip came out over 8 MB. Try again with less going on.");
+        setError("That clip came out over 16 MB. Try again with less going on.");
         return;
       }
       if (blob.size < 1024) {
@@ -356,14 +363,14 @@ export function PostPeekDialog({
     if (!file) return;
     setError("");
     if (file.size > MAX_BYTES) {
-      setError("That clip is over 8 MB. Save it smaller and try again.");
+      setError("That clip is over 16 MB. Save it smaller and try again.");
       return;
     }
     const url = URL.createObjectURL(file);
     const seconds = await readDuration(url);
     if (Number.isFinite(seconds) && seconds > MAX_SECONDS) {
       URL.revokeObjectURL(url);
-      setError("Peeks are five seconds. Trim it and try again.");
+      setError("Peeks are ten seconds at most. Trim it and try again.");
       return;
     }
     frame.current = null;
@@ -434,7 +441,7 @@ export function PostPeekDialog({
         <DialogHeader>
           <DialogTitle>Post a Peek</DialogTitle>
           <DialogDescription>
-            What is behind you today? Five seconds, up for 24 hours.
+            What is behind you today? Up to ten seconds, up for 24 hours.
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -470,7 +477,7 @@ export function PostPeekDialog({
                 </label>
               </div>
               <p className="muted small peek-ways-note">
-                MP4, WebM or MOV · up to 8 MB · five seconds at most
+                MP4, WebM or MOV · up to 16 MB · ten seconds at most
               </p>
             </>
           )}
@@ -534,7 +541,7 @@ export function PostPeekDialog({
                   className="primary"
                   onClick={recording ? stopRecording : record}
                 >
-                  {recording ? "Stop" : "Record 5 seconds"}
+                  {recording ? "Stop" : "Record 10 seconds"}
                 </button>
                 <button
                   className="quiet"
@@ -575,7 +582,7 @@ export function PostPeekDialog({
               value={caption}
               maxLength={140}
               onChange={(event) => setCaption(event.target.value)}
-              placeholder="Five seconds of what, exactly? (optional)"
+              placeholder="Ten seconds of what, exactly? (optional)"
               {...counter.handlers}
             />
           </label>

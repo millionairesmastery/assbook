@@ -43,7 +43,7 @@ export function PeeksStrip({
             className="peek-item"
             onClick={() => (own ? onOpenPerson(viewer.id) : onPostPeek())}
             aria-label={
-              own ? "Watch your peek" : "Post a peek, five seconds of your day"
+              own ? "Watch your peek" : "Post a peek, ten seconds of your day"
             }
           >
             <span className="peek-avatar">

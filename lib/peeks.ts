@@ -14,10 +14,10 @@ import {
 } from "./server";
 import type { Profile } from "./types";
 
-// Peeks: five-second clips that live for a day. The file goes after that,
+// Peeks: clips of up to ten seconds that live for a day. The file goes after that,
 // the record and its numbers stay.
 export const PEEK_LIFE_MS = 86400000;
-const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_BYTES = 16 * 1024 * 1024;
 const LIVE = "k.deleted=0 AND k.expires>(strftime('%s','now')*1000)";
 const NOT_BLOCKED =
   "NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?))";
@@ -266,7 +266,7 @@ export async function peeksRoute(
     const bytes = await readBody(req, MAX_BYTES);
     const type = videoType(bytes);
     if (!type || bytes.length < 1024)
-      throw new HttpError(400, "Use an MP4 or WebM clip under 8 MB.");
+      throw new HttpError(400, "Use an MP4 or WebM clip under 16 MB.");
     const id = crypto.randomUUID();
     await bucket().put(key(id), bytes, {
       httpMetadata: { contentType: type },

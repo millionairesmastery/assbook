@@ -34,9 +34,26 @@ import { api } from "@/lib/api-client";
 import { age, plural } from "@/lib/format";
 import type { Peek, PeekPerson, Profile } from "@/lib/types";
 
-// A clip runs for five seconds. Used for the progress bar until the browser
+// A clip runs for up to ten seconds. Used for the progress bar until the browser
 // has told us what the file really holds.
-const CLIP_MS = 5000;
+const CLIP_MS = 10000;
+// Sound stays the way it was last left. The tap that opens the viewer is
+// the gesture browsers want before sound, so the first clip can play aloud.
+const SOUND_KEY = "peek-muted";
+function rememberedMute(): boolean {
+  try {
+    return localStorage.getItem(SOUND_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function rememberMute(value: boolean) {
+  try {
+    localStorage.setItem(SOUND_KEY, value ? "1" : "0");
+  } catch {
+    // A private window forgets; the session still works.
+  }
+}
 const SWIPE = 45;
 
 function reducedMotion(): boolean {
@@ -88,7 +105,7 @@ export function PeekViewer({
       : 0;
     return { p, k };
   });
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(rememberedMute);
   const [sheet, setSheet] = useState(false);
   const [dialog, setDialog] = useState<"" | "report" | "remove">("");
   const [failed, setFailed] = useState(false);
@@ -173,7 +190,14 @@ export function PeekViewer({
     if (!video) return;
     video.muted = muted;
     if (blocked) video.pause();
-    else void video.play().catch(() => undefined);
+    else
+      void video.play().catch(() => {
+        // A browser that refuses sound here still plays quietly.
+        if (video.muted) return;
+        video.muted = true;
+        setMuted(true);
+        void video.play().catch(() => undefined);
+      });
   }, [blocked, muted, pos]);
 
   // The segment that is filling. A tick a second where motion is unwelcome,
@@ -365,7 +389,12 @@ export function PeekViewer({
             />
             <button
               className="peek-zone"
-              onClick={() => setMuted((current) => !current)}
+              onClick={() =>
+                setMuted((current) => {
+                  rememberMute(!current);
+                  return !current;
+                })
+              }
               aria-label={muted ? "Turn the sound on" : "Turn the sound off"}
               aria-pressed={!muted}
             />
@@ -417,7 +446,12 @@ export function PeekViewer({
               </div>
               <button
                 className="peek-icon"
-                onClick={() => setMuted((current) => !current)}
+                onClick={() =>
+                setMuted((current) => {
+                  rememberMute(!current);
+                  return !current;
+                })
+              }
                 aria-label={muted ? "Turn the sound on" : "Turn the sound off"}
                 aria-pressed={!muted}
               >

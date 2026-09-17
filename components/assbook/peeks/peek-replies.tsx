@@ -140,7 +140,7 @@ export function PeekReplies({
           </p>
         ) : replies.length === 0 ? (
           <p className="muted small">
-            Nothing yet. Five seconds deserve a few words.
+            Nothing yet. Ten seconds deserve a few words.
           </p>
         ) : (
           replies.map((item) => (
@@ -180,7 +180,7 @@ export function PeekReplies({
             value={reply}
             onChange={(event) => setReply(event.target.value)}
             maxLength={280}
-            placeholder="Say something nice about those five seconds."
+            placeholder="Say something nice about those ten seconds."
             required
             {...counter.handlers}
           />
@@ -201,7 +201,7 @@ export function PeekReplies({
     </>
   );
 
-  const title = "Five seconds, many opinions.";
+  const title = "Ten seconds, many opinions.";
   const description = "Replies stay after the clip has gone.";
 
   return mobile ? (
