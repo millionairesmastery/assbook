@@ -42,8 +42,8 @@ and "Reply" answers a person by handle. @handles anywhere in a post or reply
 link to the profile, offer people while you type, and tell the person named.
 
 Notifications live behind the bell in the top bar: a follow, a like or a reply
-on a post or a peek, a re-peek, and notes from the crew when a photo has been
-reviewed. They are written when the event happens and kept for two months.
+on a post or a peek, a heart or an answer on one of your replies, an @mention,
+a re-peek, and notes from the crew when a photo has been reviewed. They are written when the event happens and kept for two months.
 The count is polled once a minute while the app is open; opening the list
 marks everything read. Nothing is emailed or pushed.
 
@@ -52,13 +52,12 @@ Demo profiles and posts are optional and clearly labeled. They cannot sign in.
 ## Stack
 
 React + TypeScript + vinext (Next.js-compatible app routing), Cloudflare Workers,
-D1 (SQLite), R2, Cloudflare Email Sending, Tailwind, Radix/Shadcn primitives, and Lucide icons.
-The installed vinext version is 1.0.0-beta.5.
+D1 (SQLite), R2, Workers AI, Cloudflare Email Sending, Tailwind, Radix/Shadcn
+primitives, and Lucide icons. The installed vinext version is 1.0.0-beta.5.
 
 The frontend and API run on one Cloudflare Worker. Static assets use Workers
-Static Assets; the API uses D1 and R2 bindings. This checkout is prepared for
-your own Cloudflare account and does not require OpenAI Sites hosting or
-ChatGPT authentication.
+Static Assets; the API uses the D1, R2 and AI bindings. This checkout is
+prepared for your own Cloudflare account.
 
 ## Local development
 
@@ -107,23 +106,26 @@ concurrent replay, session revocation, and legacy password upgrades.
    the `DB` entry in `wrangler.jsonc`.
 3. Run `npx wrangler r2 bucket create assbook-photos`. If the name is already
    used in your account, choose another and update `bucket_name`.
-4. Run `npm run db:remote` to apply the schema to your new database.
+4. Run `npm run db:remote` to apply every migration to your new database.
 5. Optionally add the labeled demo content:
    `npx wrangler d1 execute DB --remote --config wrangler.jsonc --file db/seed.sql`.
 6. Enable Cloudflare Email Sending for your own domain and verify its DNS records.
    Set `APP_ORIGIN` to the app's HTTPS address and `EMAIL_FROM` to a sender on
    that verified domain. The checked-in `.example` values are placeholders.
-7. Run `npm run source:zip`, then `npm run deploy`.
-8. Open your app, create an account, and test email verification and password
+7. Keep the `ai` binding for the automatic photo check and accept the Llama 3.2
+   Vision licence once from your account (send the prompt `agree` to the model),
+   or set `PHOTO_CHECK` to `off` in `wrangler.jsonc` to run without it.
+8. Run `npm run source:zip`, then `npm run deploy`.
+9. Open your app, create an account, and test email verification and password
    recovery using a real mailbox you control.
-9. Set `ADMIN_HANDLE` in `wrangler.jsonc` to that existing account's handle
+10. Set `ADMIN_HANDLE` in `wrangler.jsonc` to that existing account's handle
    (lowercase), then redeploy. The account menu will show the moderation queue.
    While it is empty, reports are stored but nobody can read them.
 
-There is no cron trigger. Expired sessions, limits, and links, and photos that
-never became an avatar or a live post, are cleaned up after sign-ins. Deleting
-a post or replacing an avatar removes the old photo from storage when nothing
-else uses it.
+There is no cron trigger. Expired sessions, limits, and links, photos that
+never became an avatar or a live post, expired peek clips, and notifications
+older than two months are cleaned up after sign-ins. Deleting a post or
+replacing an avatar removes the old photo from storage when nothing else uses it.
 
 Do not configure a moderator handle until you own that handle. Do not put
 passwords or API tokens in `wrangler.jsonc`. Cloudflare access is managed by
@@ -144,32 +146,34 @@ or commit a release archive through your own release process.
 
 This is a working first version, not a claim of readiness for a mass launch.
 
-- Photos require the uploader to attest ownership and clothing; there is **no
-  automated image moderation**. Reports require an operator to review them.
-- Configure a moderator and add an operational moderation process before
-  inviting the public. Profile-photo reports are not yet a separate workflow.
+- Every photo and peek frame goes through the automatic dress-code check
+  before it is stored, and the moderator's queue lists what the model was
+  unsure about, next to the reports. The check is a first line, not a
+  guarantee: configure a moderator and an operational moderation process
+  before inviting the public. Uploaders still attest ownership and clothing.
 - Existing accounts must add and verify a recovery email from Account security.
   Accounts without one cannot use email recovery. MFA/passkeys and account
   deletion are not implemented yet.
 - Passwords use salted scrypt (N=16384, r=8, p=5). Legacy PBKDF2 passwords
   upgrade after successful sign-in. New passwords require 15 to 128 characters.
   See [SECURITY.md](SECURITY.md) for the security model and remaining boundaries.
-- Apply all migrations before deploying: `0001_solid_blue_blade.sql` adds email,
-  account versions, and recovery-token storage; `0002_warm_spitfire.sql` adds
-  the indexes and the report constraint the code relies on. Neither removes
-  existing users.
+- Apply every migration in `drizzle/` before deploying; `npm run db:remote`
+  applies the ones still missing. Migrations only add tables, columns and
+  indexes; none removes existing users or content.
 - Same-origin write checks, bounded uploads, file-signature checks, ownership
   checks, hashed session tokens, per-IP limits on public reads (tighter on
   search), and per-account write limits are included. Sign-in throttling counts
   failed attempts only. Add an edge bot challenge and tune limits for your
   deployment.
-- Uploads are JPEG/PNG/WebP, at most 2 MB. Unattached uploads are visible only to
-  their owner. The server does not strip EXIF metadata or scan image contents.
+- Photo uploads are JPEG/PNG/WebP up to 2 MB; peek clips are MP4/WebM up to
+  16 MB and are deleted after a day. Unattached uploads are visible only to
+  their owner. The server does not strip EXIF metadata.
 - Posts are soft-deleted. A cleanup/retention policy for uploads, reports, and
   inactive accounts is an operator decision.
 - Feed pagination is keyset-based. Search is simple SQLite text matching;
   adapt it when you have enough real traffic to measure.
 - No private messaging, push notifications, or recommendation algorithm.
+  Notifications are in-app only.
 
 ## Open source
 
@@ -184,18 +188,27 @@ or credentials. Set up your own database and bucket when self-hosting.
 
 ## Where things live
 
-- `app/assbook.tsx`: the app shell; `components/assbook/`: feed, composer,
-  profile, people, auth, moderation, and dialog components; `hooks/`: viewer,
-  feed, people, and profile state.
+- `app/page.tsx`, `app/assbook.tsx`: the entry and the app shell;
+  `app/[handle]/`: the server-rendered `/@handle` profile pages; `app/about`,
+  `app/terms`, `app/privacy`, `app/rules`, `app/contact`: the written pages.
+- `components/assbook/`: feed, composer, replies, profile, people, peeks,
+  notifications, auth, moderation, landing and legal components;
+  `mention-field.tsx` and `mention-text.tsx` handle @handles.
+- `hooks/`: viewer, feed, people, profile, peeks, notifications and search state.
 - `lib/api-client.ts`: the one fetch wrapper with friendly errors.
 - `app/globals.css`: visual system and responsive styles.
 - `middleware.ts`: security headers for pages.
 - `app/api/[...path]/route.ts`: HTTP API and permission checks.
-- `lib/server.ts`: storage access, sessions, validation, rate limiting.
+- `lib/server.ts`: storage access, sessions, validation, rate limiting, housekeeping.
+- `lib/moderation.ts`: the automatic photo check on Workers AI.
+- `lib/peeks.ts`: peek upload, streaming, views, re-peeks and expiry.
+- `lib/notifications.ts`: notifications and @mention delivery.
 - `lib/auth.ts`, `lib/password.ts`: recovery, email verification, password security.
 - `app/account-security.tsx`: recovery and account-security screens.
 - `db/schema.ts`, `drizzle/`: database schema and immutable migrations.
 - `db/seed.sql`: optional clearly labeled sample profiles/posts.
+- `public/robots.txt`, `public/sitemap.xml`: crawler guidance; crawlers,
+  AI crawlers included, are welcome on the public pages.
 - `wrangler.jsonc`: Cloudflare source configuration.
 - `scripts/smoke-test.mjs`: local API integration checks.
 - `scripts/auth-test.mjs`: local account-security integration checks.

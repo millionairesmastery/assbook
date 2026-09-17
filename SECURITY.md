@@ -58,7 +58,7 @@ the generic response. Logs include a failure event without recipient or token.
 - Configure and verify Cloudflare Email Sending and test real inbox delivery.
   Local bindings simulate email; their files and logs contain disposable links
   and must never be published.
-- Apply migrations through `0002_warm_spitfire.sql` before deploying this code.
+- Apply every migration in `drizzle/` (currently through `0014_cool_slayback.sql`) before deploying this code.
   Existing accounts are preserved and begin without a verified email.
 - Protect operator accounts and configure an owned, lowercase ADMIN_HANDLE.
   Moderator actions are logged with the moderator's account id and the post.
