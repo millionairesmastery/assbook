@@ -29,6 +29,20 @@
       "when": 1789635154596,
       "tag": "0003_warm_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789638895615,
+      "tag": "0004_absurd_redwing",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789639707131,
+      "tag": "0005_flowery_blade",
+      "breakpoints": true
     }
   ]
 }

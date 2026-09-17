@@ -103,7 +103,22 @@ export function EditProfileDialog({
                 onChange={(event) => setName(event.target.value)}
                 required
                 maxLength={40}
+                disabled={!!user.nameLockedUntil}
               />
+              {user.nameLockedUntil ? (
+                <span className="small muted">
+                  Names change once every 14 days. Yours unlocks on{" "}
+                  {new Date(user.nameLockedUntil).toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "long",
+                  })}
+                  .
+                </span>
+              ) : (
+                <span className="small muted">
+                  You can change your name once every 14 days.
+                </span>
+              )}
             </label>
             <label>
               <span className="label-row">

@@ -901,30 +901,6 @@ h2 {
   font-size: 14px;
   padding: 10px;
 }
-.profile-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 17px;
-  padding: 23px;
-  margin: 22px 0;
-}
-.profile-card h2 {
-  font-size: 23px;
-  margin: 0 0 4px;
-}
-.profile-card p {
-  font-size: 14px;
-  margin-bottom: 10px;
-  overflow-wrap: anywhere;
-}
-.profile-card > div {
-  flex: 1;
-  min-width: 0;
-}
-.profile-card .follow-button {
-  flex-shrink: 0;
-  font-size: 13px;
-}
 .attachment {
   position: relative;
   margin: 12px 0;
@@ -1064,18 +1040,6 @@ h2 {
   }
   .assbook-dialog {
     padding: 25px 20px !important;
-  }
-  .profile-card {
-    gap: 10px;
-    padding: 17px;
-  }
-  .profile-card .avatar.large {
-    width: 55px;
-    height: 55px;
-    font-size: 32px;
-  }
-  .profile-card h2 {
-    font-size: 20px;
   }
   .post-head .person-name b,
   .post-head .person-name p {
@@ -1257,4 +1221,263 @@ h2 {
   gap: 4px;
   color: #5f6b75;
   margin: 6px 0 10px;
+}
+
+/* Two plain controls in the top bar when nobody is signed in. */
+.top-auth {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.top-auth .join-button {
+  margin-left: 0;
+  min-height: 44px;
+  padding: 0 11px;
+  border-radius: 9px;
+}
+.top-auth .join-button:hover {
+  background: #fff0e8;
+  color: #c94120;
+}
+
+/* The one account that speaks for Assbook itself. */
+.official-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: middle;
+  background: #eaf0fc;
+  color: #294a8b;
+}
+
+/* A post a moderator parked at the top of the feed. */
+.pinned-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 11px ui-monospace, monospace;
+  letter-spacing: 0.7px;
+  color: #a2542f;
+  margin-bottom: 13px;
+}
+
+/* Profile header: the whole person, before their posts. */
+.profile-header {
+  padding: 23px 23px 0;
+  margin: 22px 0;
+}
+.profile-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 17px;
+}
+.profile-header .avatar.large {
+  width: 88px;
+  height: 88px;
+  font-size: 48px;
+  border-radius: 22px;
+}
+.profile-identity {
+  flex: 1;
+  min-width: 0;
+  padding-top: 6px;
+}
+.profile-header h2 {
+  font-size: 25px;
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+.profile-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.profile-actions .follow-button {
+  margin: 0;
+  min-height: 40px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.profile-actions .text-link {
+  font-size: 12px;
+  padding: 4px 0;
+}
+.profile-bio {
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 15px 0 0;
+  overflow-wrap: anywhere;
+}
+.profile-joined {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #5f6b75;
+  margin: 9px 0 0;
+}
+.profile-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 14px 0 2px;
+}
+.stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  color: #5f6b75;
+  padding: 6px 0;
+  min-height: 34px;
+}
+.stat b {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--foreground);
+}
+button.stat:hover {
+  color: #c94120;
+}
+.profile-tabs {
+  border-top: 1px solid var(--border);
+  margin: 12px -23px 0;
+  padding: 0 23px;
+}
+.profile-tabs [role="tablist"] {
+  height: 44px;
+  padding: 0;
+  gap: 22px;
+}
+.profile-tabs [role="tab"] {
+  font-size: 14px;
+  padding: 0 3px;
+  font-weight: 600;
+}
+.profile-tabs [role="tab"][data-state="active"]:after {
+  background: #f45c35;
+  bottom: 0;
+  height: 3px;
+}
+
+/* The community, in the main column. */
+.people-view .feed-toolbar h2 {
+  font-size: 18px;
+  letter-spacing: -0.4px;
+}
+.people-list {
+  padding: 4px 18px;
+  margin-top: 16px;
+}
+.people-list .person {
+  margin: 14px 0;
+}
+
+/* Bums of the month: the rail's most liked posts. */
+.top-posts {
+  padding: 19px;
+  margin-bottom: 18px;
+}
+.top-posts h2 {
+  font-size: 19px;
+  margin: 10px 0 5px;
+}
+.top-posts ul {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.top-post {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 7px;
+  border-radius: 10px;
+}
+.top-post:hover {
+  background: #f7f8fa;
+}
+.top-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #214cd8;
+}
+.top-posts .avatar {
+  width: 38px;
+  height: 38px;
+  font-size: 20px;
+  border-radius: 10px;
+}
+.top-post-name {
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top-post-likes {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #c94120;
+}
+
+@media (max-width: 650px) {
+  .profile-header {
+    padding: 17px 17px 0;
+  }
+  .profile-top {
+    gap: 12px;
+  }
+  .profile-header .avatar.large {
+    width: 72px;
+    height: 72px;
+    font-size: 40px;
+    border-radius: 19px;
+  }
+  .profile-header h2 {
+    font-size: 21px;
+  }
+  .profile-identity {
+    padding-top: 2px;
+  }
+  .profile-actions .follow-button {
+    min-height: 44px;
+  }
+  .profile-stats {
+    gap: 6px 18px;
+  }
+  .stat {
+    min-height: 44px;
+  }
+  .profile-tabs {
+    margin: 10px -17px 0;
+    padding: 0 17px;
+  }
+  .people-list {
+    padding: 4px 14px;
+  }
+  .top-auth .join-button {
+    font-size: 13px;
+    padding: 0 8px;
+  }
+}
+
+/* Seven targets on the smallest phones: keep 44px and give back the padding. */
+@media (max-width: 380px) {
+  .mobile-nav {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
 }

@@ -120,6 +120,11 @@ try {
     avatar: photo.url,
   });
   assert.equal((await req(a, "me")).user.avatar, photo.url);
+  // Display names change once every 14 days; bio and photo stay free.
+  assert.ok((await req(a, "me")).user.nameLockedUntil > Date.now());
+  await req(a, "profile", "PUT", { name: "Too soon" }, 400);
+  await req(a, "profile", "PUT", { name: "Updated test", bio: "Still on." });
+  assert.equal((await req(a, "me")).user.bio, "Still on.");
   const image = await fetch(base + photo.url);
   assert.equal(image.status, 200);
   assert.equal(image.headers.get("content-type"), "image/png");
@@ -150,7 +155,16 @@ try {
   assert.equal((await req(a, "feed?filter=saved")).posts.length, 0);
   await req(b, "follow/" + au.id, "PUT");
   assert.equal((await req(b, "feed?filter=following")).posts[0].id, p.id);
-  pass("Idempotent likes, private bookmarks, and following feed");
+  const aProfile = (await req(anon, "profile/" + handles[0])).profile;
+  assert.equal(aProfile.followers, 1);
+  assert.equal(aProfile.following_count, 0);
+  assert.equal(aProfile.posts_count, 1);
+  assert.equal((await req(anon, "profile/" + handles[0] + "/followers")).people[0].id, bu.id);
+  assert.equal((await req(anon, "profile/" + handles[1] + "/following")).people[0].id, au.id);
+  assert.equal((await req(anon, "profile/" + handles[1] + "/followers")).people.length, 0);
+  const top = (await req(anon, "top")).posts;
+  assert.ok(top.some((x) => x.id === p.id), "A liked post shows in the top list");
+  pass("Idempotent likes, private bookmarks, following feed, follower lists, profile counts, and top posts");
   await req(b, "comments/" + p.id, "POST", { body: "A test reply" }, 201);
   const replies = (await req(a, "comments/" + p.id)).comments;
   assert.equal(replies.length, 1);
@@ -260,6 +274,27 @@ try {
     assert.equal((await fetch(base + flagged.url, { headers: { Cookie: a.cookie } })).status, 404);
     await req(a, "profile", "PUT", { avatar: photo.url });
     pass("Photo check rejects, queues unsure photos, and the moderator can approve or remove them");
+    // Official account (the moderator handle): cannot be blocked or reported,
+    // can pin posts to the top of the main feed.
+    const adminUser = (await req(admin, "me")).user;
+    const welcome = await req(admin, "posts", "POST", { body: "Welcome to the backside " + suffix }, 201);
+    await req(b, "report/" + welcome.id, "POST", { reason: "Nope" }, 400);
+    await req(b, "block/" + adminUser.id, "PUT", undefined, 400);
+    const later = await req(a, "posts", "POST", { body: "Newer than the welcome " + suffix }, 201);
+    assert.equal((await req(anon, "feed")).posts[0].id, later.id, "Unpinned welcome sorts by time");
+    assert.equal((await req(admin, "admin/pin/" + welcome.id, "POST", {})).pinned, true);
+    const withPin = (await req(anon, "feed")).posts;
+    assert.equal(withPin[0].id, welcome.id, "Pinned post comes first");
+    assert.equal(withPin[0].pinned, 1);
+    assert.equal(withPin[0].official, 1);
+    assert.equal(withPin.filter((x) => x.id === welcome.id).length, 1, "Pinned post appears once");
+    assert.equal((await req(admin, "admin/pin/" + welcome.id, "POST", {})).pinned, false);
+    await req(a, "admin/pin/" + welcome.id, "POST", {}, 403);
+    const adminProfile = (await req(anon, "profile/" + adminUser.handle)).profile;
+    assert.equal(adminProfile.official, 1);
+    assert.equal(adminProfile.posts_count, 1);
+    pass("Official account cannot be blocked or reported; pins sit first in the main feed");
+    await req(a, "posts/" + later.id, "DELETE");
   } else console.log("SKIP moderator queue (set ASSBOOK_ADMIN_HANDLE and ADMIN_HANDLE in .dev.vars)");
   await req(a, "posts/" + p.id, "DELETE");
   assert.equal((await req(anon, "feed?post=" + p.id)).posts.length, 0);

@@ -8,7 +8,11 @@ export type Profile = {
   created: number;
   following?: number;
   followers?: number;
+  following_count?: number;
+  posts_count?: number;
+  official?: number;
   isAdmin?: boolean;
+  nameLockedUntil?: number | null;
 };
 export type Post = {
   id: string;
@@ -16,10 +20,12 @@ export type Post = {
   body: string;
   image: string | null;
   created: number;
+  pinned: number;
   handle: string;
   name: string;
   avatar: string | null;
   demo: number;
+  official: number;
   likes: number;
   comments: number;
   liked: number;

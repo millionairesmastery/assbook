@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { Check, Plus } from "lucide-react";
 import { Avatar } from "@/components/assbook/avatar";
+import { OfficialBadge } from "@/components/assbook/official-badge";
 import type { Profile } from "@/lib/types";
 
 /** One row in the rail, the community dialog and the blocked list. */
@@ -16,7 +17,10 @@ export function PersonRow({
 }) {
   const identity = (
     <>
-      <b>{person.name}</b>
+      <b>
+        {person.name}
+        {person.official === 1 && <OfficialBadge />}
+      </b>
       <span className="person-meta">@{person.handle}</span>
     </>
   );

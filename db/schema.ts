@@ -18,6 +18,8 @@ export const users = sqliteTable("users", {
   created: integer().notNull(),
   email: text().unique(),
   authVersion: integer("auth_version").notNull().default(0),
+  // Display names change at most once every 14 days.
+  nameChangedAt: integer("name_changed_at"),
 }, (t) => [index("users_avatar").on(t.avatar)]);
 export const sessions = sqliteTable(
   "sessions",
@@ -45,11 +47,14 @@ export const posts = sqliteTable(
     image: text(),
     created: integer().notNull(),
     deleted: integer().notNull().default(0),
+    // Pinned posts sit at the top of the main feed. Only the moderator pins.
+    pinned: integer().notNull().default(0),
   },
   (t) => [
     index("posts_created").on(t.created),
     index("posts_user").on(t.userId, t.created),
     index("posts_image").on(t.image),
+    index("posts_pinned").on(t.pinned, t.created),
   ],
 );
 export const comments = sqliteTable(

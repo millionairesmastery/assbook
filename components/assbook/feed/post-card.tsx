@@ -1,7 +1,8 @@
 "use client";
 import { memo } from "react";
-import { Bookmark, Heart, MessageCircle, Send } from "lucide-react";
+import { Bookmark, Heart, MessageCircle, Pin, Send } from "lucide-react";
 import { Avatar } from "@/components/assbook/avatar";
+import { OfficialBadge } from "@/components/assbook/official-badge";
 import { PostMenu } from "@/components/assbook/feed/post-menu";
 import { age } from "@/lib/format";
 import type { Post, Profile } from "@/lib/types";
@@ -12,6 +13,7 @@ export type PostCardProps = {
   now: number;
   likePending: boolean;
   savePending: boolean;
+  pinPending: boolean;
   onLike: (post: Post) => void;
   onSave: (post: Post) => void;
   onReplies: (post: Post) => void;
@@ -20,6 +22,7 @@ export type PostCardProps = {
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
   onBlock: (post: Post) => void;
+  onPin: (post: Post) => void;
 };
 
 export const PostCard = memo(function PostCard({
@@ -28,6 +31,7 @@ export const PostCard = memo(function PostCard({
   now,
   likePending,
   savePending,
+  pinPending,
   onLike,
   onSave,
   onReplies,
@@ -36,10 +40,17 @@ export const PostCard = memo(function PostCard({
   onDelete,
   onReport,
   onBlock,
+  onPin,
 }: PostCardProps) {
   const isOwn = viewer?.id === post.user_id;
   return (
     <article className="post card" id={"post-" + post.id}>
+      {post.pinned === 1 && (
+        <p className="pinned-label">
+          <Pin size={13} aria-hidden="true" />
+          Pinned
+        </p>
+      )}
       <div className="post-head">
         <button
           onClick={() => onVisitProfile(post.handle)}
@@ -53,6 +64,7 @@ export const PostCard = memo(function PostCard({
         >
           <b>
             {post.name}
+            {post.official === 1 && <OfficialBadge />}
             {post.demo === 1 && <span className="tiny-badge">SAMPLE</span>}
           </b>
           <span className="person-meta">
@@ -75,9 +87,12 @@ export const PostCard = memo(function PostCard({
         <PostMenu
           post={post}
           isOwn={isOwn}
+          canPin={!!viewer?.isAdmin}
+          pinPending={pinPending}
           onDelete={onDelete}
           onReport={onReport}
           onBlock={onBlock}
+          onPin={onPin}
         />
       </div>
       <p className="post-text">{post.body}</p>

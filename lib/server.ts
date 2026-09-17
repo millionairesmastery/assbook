@@ -164,6 +164,8 @@ export async function equal(a: string, b: string) {
   );
   return crypto.subtle.verify("HMAC", other, sig, msg);
 }
+// How long a display name is locked after it changes.
+export const NAME_COOLDOWN_MS = 14 * 86400000;
 export function sessionToken(req: Request) {
   return (
     req.headers
@@ -179,17 +181,20 @@ export async function viewer(req: Request) {
   if (!/^[a-f0-9-]{72}$/.test(token)) return null;
   const user = await db()
     .prepare(
-      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND s.auth_version=u.auth_version",
+      "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,u.name_changed_at FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND s.auth_version=u.auth_version",
     )
     .bind(await hash(token), Date.now())
-    .first<Profile>();
+    .first<Profile & { name_changed_at: number | null }>();
+  if (!user) return null;
   const admin = adminHandle();
-  return user
-    ? {
-        ...user,
-        isAdmin: !!admin && user.handle === admin,
-      }
-    : null;
+  const { name_changed_at, ...profile } = user;
+  const lockedUntil = name_changed_at ? name_changed_at + NAME_COOLDOWN_MS : 0;
+  return {
+    ...profile,
+    official: !!admin && user.handle === admin ? 1 : 0,
+    isAdmin: !!admin && user.handle === admin,
+    nameLockedUntil: lockedUntil > Date.now() ? lockedUntil : null,
+  };
 }
 export async function requireUser(req: Request) {
   const user = await viewer(req);

@@ -1,6 +1,9 @@
 "use client";
-import { Loader2, RefreshCw } from "lucide-react";
+import { CalendarDays, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar } from "@/components/assbook/avatar";
+import { OfficialBadge } from "@/components/assbook/official-badge";
+import { joined, plural } from "@/lib/format";
 import type { Profile } from "@/lib/types";
 
 export function ProfileCard({
@@ -10,6 +13,10 @@ export function ProfileCard({
   error,
   onRetry,
   onEdit,
+  onOpenSecurity,
+  onOpenFollowers,
+  onOpenFollowing,
+  onChooseView,
   onFollow,
   followPending,
 }: {
@@ -19,6 +26,10 @@ export function ProfileCard({
   error: string;
   onRetry: () => void;
   onEdit: () => void;
+  onOpenSecurity: () => void;
+  onOpenFollowers: () => void;
+  onOpenFollowing: () => void;
+  onChooseView: (view: string) => void;
   onFollow: (person: Profile) => void;
   followPending: boolean;
 }) {
@@ -44,33 +55,110 @@ export function ProfileCard({
   if (!profile) return null;
 
   const isMe = viewer?.id === profile.id;
+  const posts = profile.posts_count ?? 0;
+  const followers = profile.followers ?? 0;
+  const following = profile.following_count ?? 0;
+
   return (
-    <section className="profile-card card">
-      <Avatar person={profile} large />
-      <div>
-        <h2>{profile.name}</h2>
-        <p className="muted">
-          @{profile.handle}
-          {profile.demo ? " · Sample profile" : ""}
-        </p>
-        <p>{profile.bio || "Still finding the right words."}</p>
-        <p className="small">{profile.followers ?? 0} followers</p>
+    <section className="profile-header card">
+      <div className="profile-top">
+        <Avatar person={profile} large />
+        <div className="profile-identity">
+          <h2>
+            {profile.name}
+            {profile.official === 1 && <OfficialBadge />}
+            {profile.demo === 1 && <span className="tiny-badge">SAMPLE</span>}
+          </h2>
+          <p className="person-meta">@{profile.handle}</p>
+        </div>
+        <div className="profile-actions">
+          {isMe ? (
+            <>
+              <button className="follow-button" onClick={onEdit}>
+                Edit profile
+              </button>
+              <button className="text-link" onClick={onOpenSecurity}>
+                <ShieldCheck size={15} aria-hidden="true" />
+                Account security
+              </button>
+            </>
+          ) : (
+            <button
+              className={
+                "follow-button " + (profile.following ? "is-following" : "")
+              }
+              disabled={followPending}
+              onClick={() => onFollow(profile)}
+              aria-label={
+                (profile.following ? "Unfollow " : "Follow ") + profile.name
+              }
+            >
+              {profile.following ? "Following" : "Follow"}
+            </button>
+          )}
+        </div>
       </div>
-      {isMe ? (
-        <button className="follow-button" onClick={onEdit}>
-          Edit profile
-        </button>
-      ) : (
+      <p className="profile-bio">
+        {profile.bio || "Still finding the right words."}
+      </p>
+      <p className="profile-joined">
+        <CalendarDays size={14} aria-hidden="true" />
+        {joined(profile.created)}
+      </p>
+      <div className="profile-stats">
+        <div className="stat">
+          <b>{posts}</b>
+          <span>{plural(posts, "Post", "Posts")}</span>
+        </div>
         <button
-          className={"follow-button " + (profile.following ? "is-following" : "")}
-          disabled={followPending}
-          onClick={() => onFollow(profile)}
+          className="stat"
+          onClick={onOpenFollowers}
           aria-label={
-            (profile.following ? "Unfollow " : "Follow ") + profile.name
+            "Show the " +
+            followers +
+            " " +
+            plural(followers, "follower", "followers") +
+            " of " +
+            profile.name
           }
         >
-          {profile.following ? "Following" : "Follow"}
+          <b>{followers}</b>
+          <span>{plural(followers, "Follower", "Followers")}</span>
         </button>
+        <button
+          className="stat"
+          onClick={onOpenFollowing}
+          aria-label={
+            "Show the " +
+            following +
+            " " +
+            plural(following, "account", "accounts") +
+            " " +
+            profile.name +
+            " follows"
+          }
+        >
+          <b>{following}</b>
+          <span>Following</span>
+        </button>
+      </div>
+      {isMe ? (
+        <Tabs
+          className="profile-tabs"
+          value="profile"
+          onValueChange={onChooseView}
+        >
+          <TabsList variant="line" aria-label="Your posts and saved posts">
+            <TabsTrigger value="profile">Posts</TabsTrigger>
+            <TabsTrigger value="saved">Saved</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      ) : (
+        <Tabs className="profile-tabs" value="profile">
+          <TabsList variant="line" aria-label={"Posts by " + profile.name}>
+            <TabsTrigger value="profile">Posts</TabsTrigger>
+          </TabsList>
+        </Tabs>
       )}
     </section>
   );

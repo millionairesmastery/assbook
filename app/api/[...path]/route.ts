@@ -23,11 +23,19 @@ import {
   photoId,
   deleteUnusedUpload,
   background,
+  adminHandle,
   HttpError,
 } from "@/lib/server";
 export const dynamic = "force-dynamic";
 const blockClause =
   "NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?))";
+// One post row as the client sees it. Binds, in order: the official handle,
+// two viewer ids for the reply count, one for liked, one for saved.
+const postSelect =
+  "SELECT p.id,p.user_id,p.body,p.image,p.created,p.pinned,u.handle,u.name,u.avatar,u.demo,(u.handle=?) official,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE ";
+// One person row. Binds: the official handle, then the viewer id.
+const personSelect =
+  "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,(u.handle=?) official,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u ";
 const writePaths = [
   "upload",
   "profile",
@@ -70,8 +78,11 @@ async function handle(req: Request) {
         before = Number(url.searchParams.get("before")) || 0,
         beforeId = url.searchParams.get("beforeId") ?? "";
       const clauses = ["p.deleted=0", blockClause];
-      // Two for the reply count, one each for liked and saved, two for blocks.
-      const args: (string | number)[] = [uid, uid, uid, uid, uid, uid];
+      const args: (string | number)[] = [adminHandle(), uid, uid, uid, uid, uid, uid];
+      const single = url.searchParams.get("post");
+      // The plain "everyone" feed shows pinned posts first, once, on page one.
+      const mainFeed = filter === "everyone" && !q && !profile && !single;
+      if (mainFeed) clauses.push("p.pinned=0");
       if (filter === "following") {
         clauses.push(
           "EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id)",
@@ -88,7 +99,6 @@ async function handle(req: Request) {
         clauses.push("u.handle=?");
         args.push(profile);
       }
-      const single = url.searchParams.get("post");
       if (single) {
         clauses.push("p.id=?");
         args.push(single);
@@ -108,20 +118,43 @@ async function handle(req: Request) {
         args.push(before, before, beforeId);
       }
       const rows = await db()
-        .prepare(
-          "SELECT p.id,p.user_id,p.body,p.image,p.created,u.handle,u.name,u.avatar,u.demo,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE " +
-            clauses.join(" AND ") +
-            " ORDER BY p.created DESC,p.id DESC LIMIT 31",
-        )
+        .prepare(postSelect + clauses.join(" AND ") + " ORDER BY p.created DESC,p.id DESC LIMIT 31")
         .bind(...args)
         .all<{ id: string; created: number }>();
       const hasMore = rows.results.length > 30;
-      const posts = rows.results.slice(0, 30);
-      const last = posts[posts.length - 1];
+      let posts = rows.results.slice(0, 30);
+      if (mainFeed && !before) {
+        const pinned = await db()
+          .prepare(
+            postSelect + "p.deleted=0 AND p.pinned=1 AND " + blockClause + " ORDER BY p.created DESC LIMIT 3",
+          )
+          .bind(adminHandle(), uid, uid, uid, uid, uid, uid)
+          .all<{ id: string; created: number }>();
+        posts = [...pinned.results, ...posts];
+      }
+      const last = rows.results.slice(0, 30).at(-1);
       return json({
         posts,
         hasMore,
         next: hasMore && last ? { created: last.created, id: last.id } : null,
+      });
+    }
+    if (path[0] === "top" && method === "GET") {
+      // Bums of the month: the most liked posts of the last 30 days.
+      await readLimit(req, "api", 120);
+      const since = Date.now() - 30 * 86400000;
+      return json({
+        posts: (
+          await db()
+            .prepare(
+              postSelect +
+                "p.deleted=0 AND p.created>? AND " +
+                blockClause +
+                " AND (SELECT count(*) FROM likes l WHERE l.post_id=p.id)>0 ORDER BY likes DESC,p.created DESC LIMIT 5",
+            )
+            .bind(adminHandle(), uid, uid, uid, uid, since, uid, uid)
+            .all()
+        ).results,
       });
     }
     if (path[0] === "people" && method === "GET") {
@@ -130,11 +163,31 @@ async function handle(req: Request) {
         people: (
           await db()
             .prepare(
-              "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u WHERE u.id!=? AND " +
-                blockClause +
-                " ORDER BY u.demo ASC,u.created DESC LIMIT 20",
+              personSelect + "WHERE u.id!=? AND " + blockClause + " ORDER BY u.demo ASC,u.created DESC LIMIT 60",
             )
-            .bind(uid, uid, uid, uid)
+            .bind(adminHandle(), uid, uid, uid, uid)
+            .all()
+        ).results,
+      });
+    }
+    if (path[0] === "profile" && method === "GET" && ["followers", "following"].includes(path[2] ?? "")) {
+      await readLimit(req, "api", 120);
+      if (!/^[a-z0-9_]{3,24}$/.test(path[1] ?? ""))
+        throw new HttpError(404, "This profile is unavailable.");
+      const owner = await db()
+        .prepare("SELECT u.id FROM users u WHERE u.handle=? AND " + blockClause)
+        .bind(path[1], uid, uid)
+        .first<{ id: string }>();
+      if (!owner) throw new HttpError(404, "This profile is unavailable.");
+      const relation =
+        path[2] === "followers"
+          ? "JOIN follows r ON r.user_id=u.id AND r.target_id=? "
+          : "JOIN follows r ON r.target_id=u.id AND r.user_id=? ";
+      return json({
+        people: (
+          await db()
+            .prepare(personSelect + relation + "WHERE " + blockClause + " ORDER BY u.name COLLATE NOCASE LIMIT 100")
+            .bind(adminHandle(), uid, owner.id, uid, uid)
             .all()
         ).results,
       });
@@ -145,10 +198,10 @@ async function handle(req: Request) {
         throw new HttpError(404, "This profile is unavailable.");
       const u = await db()
         .prepare(
-          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND " +
+          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,(u.handle=?) official,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,(SELECT count(*) FROM follows f WHERE f.user_id=u.id) following_count,(SELECT count(*) FROM posts p WHERE p.user_id=u.id AND p.deleted=0) posts_count,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND " +
             blockClause,
         )
-        .bind(uid, path[1], uid, uid)
+        .bind(adminHandle(), uid, path[1], uid, uid)
         .first();
       if (!u) throw new HttpError(404, "This profile is unavailable.");
       return json({ profile: u });
@@ -266,15 +319,24 @@ async function handle(req: Request) {
     if (path[0] === "profile" && method === "PUT") {
       const d = await body(req);
       // Partial updates: fields left out stay as they are.
-      const name = d.name === undefined ? null : str(d.name, 40, 1);
+      let name = d.name === undefined ? null : str(d.name, 40, 1);
+      if (name === user.name) name = null;
       const bio = d.bio === undefined ? null : str(d.bio, 160);
       const setAvatar = "avatar" in d;
       const avatar = setAvatar ? await ownImage(d.avatar, user.id) : null;
+      // A display name changes at most once every 14 days.
+      if (name !== null && user.nameLockedUntil)
+        throw new HttpError(
+          400,
+          "You changed your name recently. You can change it again on " +
+            new Date(user.nameLockedUntil).toLocaleDateString("en-GB", { day: "numeric", month: "long" }) +
+            ".",
+        );
       await db()
         .prepare(
-          "UPDATE users SET name=COALESCE(?,name),bio=COALESCE(?,bio),avatar=CASE WHEN ? THEN ? ELSE avatar END WHERE id=?",
+          "UPDATE users SET name=COALESCE(?,name),name_changed_at=CASE WHEN ? IS NULL THEN name_changed_at ELSE ? END,bio=COALESCE(?,bio),avatar=CASE WHEN ? THEN ? ELSE avatar END WHERE id=?",
         )
-        .bind(name, bio, setAvatar ? 1 : 0, avatar, user.id)
+        .bind(name, name, Date.now(), bio, setAvatar ? 1 : 0, avatar, user.id)
         .run();
       const previous = photoId(user.avatar);
       if (setAvatar && previous && user.avatar !== avatar)
@@ -330,14 +392,14 @@ async function handle(req: Request) {
       ["PUT", "DELETE"].includes(method)
     ) {
       const target = uuid(path[1]);
-      if (
-        target === user.id ||
-        !(await db()
-          .prepare("SELECT id FROM users WHERE id=?")
-          .bind(target)
-          .first())
-      )
+      const targetUser = await db()
+        .prepare("SELECT id,handle FROM users WHERE id=?")
+        .bind(target)
+        .first<{ id: string; handle: string }>();
+      if (target === user.id || !targetUser)
         throw new HttpError(400, "Choose another profile.");
+      if (path[0] === "block" && targetUser.handle === adminHandle())
+        throw new HttpError(400, "The Assbook crew is here for everyone and cannot be blocked.");
       if (
         path[0] === "follow" &&
         (await db()
@@ -410,7 +472,13 @@ async function handle(req: Request) {
     }
     if (path[0] === "report" && method === "POST") {
       await rate("report:" + user.id, 10, 3600000);
-      await visiblePost(uuid(path[1]), user.id);
+      const reported = await visiblePost(uuid(path[1]), user.id);
+      const author = await db()
+        .prepare("SELECT handle FROM users WHERE id=?")
+        .bind(reported.user_id)
+        .first<{ handle: string }>();
+      if (author?.handle === adminHandle())
+        throw new HttpError(400, "Posts by the Assbook crew cannot be reported. Reply to them instead.");
       const d = await body(req);
       // One report per person per post. Repeats are accepted and ignored.
       await db()
@@ -439,6 +507,16 @@ async function handle(req: Request) {
           ),
         ]);
         return json({ reports: reports.results, photos: photos.results });
+      }
+      if (path[1] === "pin" && method === "POST") {
+        const id = uuid(path[2]);
+        const toggled = await db()
+          .prepare("UPDATE posts SET pinned=CASE WHEN pinned=1 THEN 0 ELSE 1 END WHERE id=? AND deleted=0 RETURNING pinned")
+          .bind(id)
+          .first<{ pinned: number }>();
+        if (!toggled) throw new HttpError(404, "This post is unavailable.");
+        moderation(toggled.pinned ? "pin" : "unpin", user.id, id);
+        return json({ pinned: !!toggled.pinned });
       }
       if (path[1] === "photo") {
         const id = uuid(path[2]);

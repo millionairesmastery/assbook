@@ -17,3 +17,16 @@ export function age(time: number, now: number): string {
 export function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many;
 }
+
+// "Joined March 2026" for a profile header. Seeded sample accounts carry a
+// placeholder timestamp, so they get a gentler line instead of 1970.
+export function joined(time: number): string {
+  if (!time || time < 100) return "Here since the beginning";
+  return (
+    "Joined " +
+    new Date(time).toLocaleDateString(undefined, {
+      month: "long",
+      year: "numeric",
+    })
+  );
+}

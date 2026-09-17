@@ -57,6 +57,26 @@ export function useProfile(handle: string, viewerId: string, ready: boolean) {
     );
   }, []);
 
+  // Your own "Following" count, moved by a follow that happened anywhere on the
+  // page. It only bites when the profile on screen is the one doing the
+  // following.
+  const bumpFollowingCount = useCallback((id: string, delta: number) => {
+    setEntry((current) =>
+      current && current.profile.id === id
+        ? {
+            ...current,
+            profile: {
+              ...current.profile,
+              following_count: Math.max(
+                0,
+                (current.profile.following_count ?? 0) + delta,
+              ),
+            },
+          }
+        : current,
+    );
+  }, []);
+
   const merge = useCallback((id: string, patch: Partial<Profile>) => {
     setEntry((current) =>
       current && current.profile.id === id
@@ -71,6 +91,7 @@ export function useProfile(handle: string, viewerId: string, ready: boolean) {
     error,
     retry,
     patchFollowing,
+    bumpFollowingCount,
     merge,
   };
 }

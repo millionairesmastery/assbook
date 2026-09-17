@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Ban, Flag, MoreHorizontal, Trash2 } from "lucide-react";
+import { Ban, Flag, MoreHorizontal, Pin, PinOff, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,15 +13,21 @@ import type { Post } from "@/lib/types";
 export function PostMenu({
   post,
   isOwn,
+  canPin,
+  pinPending,
   onDelete,
   onReport,
   onBlock,
+  onPin,
 }: {
   post: Post;
   isOwn: boolean;
+  canPin: boolean;
+  pinPending: boolean;
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
   onBlock: (post: Post) => void;
+  onPin: (post: Post) => void;
 }) {
   const [confirming, setConfirming] = useState<"" | "delete" | "block">("");
   // Set synchronously on select so the menu does not pull focus back out of
@@ -32,6 +38,14 @@ export function PostMenu({
     opening.current = true;
     setConfirming(which);
   };
+
+  // The official account speaks for Assbook itself, so there is nobody to
+  // report it to and nobody to block.
+  const isOfficial = post.official === 1;
+  const pinned = post.pinned === 1;
+
+  // Nothing to offer on somebody else's official post, so skip the menu.
+  if (!canPin && !isOwn && isOfficial) return null;
 
   return (
     <>
@@ -53,22 +67,37 @@ export function PostMenu({
             }
           }}
         >
+          {canPin && (
+            <DropdownMenuItem
+              disabled={pinPending}
+              onSelect={() => onPin(post)}
+            >
+              {pinned ? (
+                <PinOff size={15} aria-hidden="true" />
+              ) : (
+                <Pin size={15} aria-hidden="true" />
+              )}
+              {pinned ? "Unpin" : "Pin to the top"}
+            </DropdownMenuItem>
+          )}
           {isOwn ? (
             <DropdownMenuItem onSelect={() => ask("delete")}>
               <Trash2 size={15} aria-hidden="true" />
               Remove your post
             </DropdownMenuItem>
           ) : (
-            <>
-              <DropdownMenuItem onSelect={() => onReport(post)}>
-                <Flag size={15} aria-hidden="true" />
-                Report post
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => ask("block")}>
-                <Ban size={15} aria-hidden="true" />
-                Leave them behind (block)
-              </DropdownMenuItem>
-            </>
+            !isOfficial && (
+              <>
+                <DropdownMenuItem onSelect={() => onReport(post)}>
+                  <Flag size={15} aria-hidden="true" />
+                  Report post
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => ask("block")}>
+                  <Ban size={15} aria-hidden="true" />
+                  Leave them behind (block)
+                </DropdownMenuItem>
+              </>
+            )
           )}
         </DropdownMenuContent>
       </DropdownMenu>

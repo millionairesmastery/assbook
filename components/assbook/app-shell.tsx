@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Toaster } from "sonner";
 import {
-  ArrowUpRight,
   Check,
   Code2,
   LogOut,
@@ -44,6 +43,7 @@ export type AppShellProps = {
   onOpenModeration: () => void;
   onSignOut: () => void;
   onJoin: () => void;
+  onSignIn: () => void;
   onOpenRules: () => void;
   onOpenSource: () => void;
   onCompose: () => void;
@@ -65,6 +65,7 @@ export function AppShell({
   onOpenModeration,
   onSignOut,
   onJoin,
+  onSignIn,
   onOpenRules,
   onOpenSource,
   onCompose,
@@ -128,9 +129,14 @@ export function AppShell({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <button className="join-button" onClick={onJoin}>
-              Join the backside <ArrowUpRight size={17} />
-            </button>
+            <div className="top-auth">
+              <button className="join-button" onClick={onJoin}>
+                Join
+              </button>
+              <button className="join-button" onClick={onSignIn}>
+                Sign in
+              </button>
+            </div>
           )}
         </header>
         <div className="three-columns">

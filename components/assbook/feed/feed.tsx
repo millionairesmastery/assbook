@@ -19,6 +19,7 @@ export type FeedProps = {
   view: string;
   query: string;
   viewer: Profile | null;
+  ownProfile?: boolean;
   now: number;
   pending: ReadonlySet<string>;
   singlePostId: string;
@@ -35,6 +36,7 @@ export type FeedProps = {
   onDelete: (post: Post) => void;
   onReport: (post: Post) => void;
   onBlock: (post: Post) => void;
+  onPin: (post: Post) => void;
 };
 
 export function Feed({
@@ -65,13 +67,15 @@ export function Feed({
   onDelete,
   onReport,
   onBlock,
+  onPin,
+  ownProfile = false,
 }: FeedProps) {
   const label = query
     ? "SEARCH RESULTS"
     : view === "saved"
       ? "SAVED FOR LATER"
       : view === "profile"
-        ? "THEIR POSTS ↓"
+        ? (ownProfile ? "YOUR POSTS ↓" : "THEIR POSTS ↓")
         : "THE LATEST ↓";
 
   const announcement =
@@ -94,12 +98,17 @@ export function Feed({
         </div>
       )}
       <div className="feed-toolbar">
-        <Tabs value={view} onValueChange={onChooseView}>
-          <TabsList variant="line" aria-label={"Viewing: " + viewName(view)}>
-            <TabsTrigger value="everyone">Everyone</TabsTrigger>
-            <TabsTrigger value="following">Following</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* The profile view has its own tabs in the header above. */}
+        {view === "profile" ? (
+          <span />
+        ) : (
+          <Tabs value={view} onValueChange={onChooseView}>
+            <TabsList variant="line" aria-label={"Viewing: " + viewName(view)}>
+              <TabsTrigger value="everyone">Everyone</TabsTrigger>
+              <TabsTrigger value="following">Following</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
         <span>
           {updating && <span className="updating-note">Updating…</span>}
           {label}
@@ -143,6 +152,7 @@ export function Feed({
             now={now}
             likePending={pending.has("like:" + post.id)}
             savePending={pending.has("save:" + post.id)}
+            pinPending={pending.has("pin:" + post.id)}
             onLike={onLike}
             onSave={onSave}
             onReplies={onReplies}
@@ -151,6 +161,7 @@ export function Feed({
             onDelete={onDelete}
             onReport={onReport}
             onBlock={onBlock}
+            onPin={onPin}
           />
         ))
       )}

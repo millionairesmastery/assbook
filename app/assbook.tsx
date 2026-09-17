@@ -11,8 +11,13 @@ import { PhotoUploadDialog } from "@/components/assbook/composer/photo-upload-di
 import { ProfileCard } from "@/components/assbook/profile/profile-card";
 import { EditProfileDialog } from "@/components/assbook/profile/edit-profile-dialog";
 import { PeopleRail } from "@/components/assbook/people/people-rail";
-import { PeopleDialog } from "@/components/assbook/people/people-dialog";
+import { PeopleView } from "@/components/assbook/people/people-view";
+import {
+  FollowListDialog,
+  type FollowListMode,
+} from "@/components/assbook/people/follow-list-dialog";
 import { BlockedDialog } from "@/components/assbook/people/blocked-dialog";
+import { TopPostsCard } from "@/components/assbook/feed/top-posts-card";
 import { AuthDialog } from "@/components/assbook/auth/auth-dialog";
 import { AccountSecurityDialog } from "@/components/assbook/auth/account-security-dialog";
 import { AccountRecoveryDialog } from "@/components/assbook/auth/account-recovery-dialog";
@@ -35,6 +40,7 @@ import { useFeed } from "@/hooks/use-feed";
 import { useNow } from "@/hooks/use-now";
 import { usePeople } from "@/hooks/use-people";
 import { useProfile } from "@/hooks/use-profile";
+import { useTopPosts } from "@/hooks/use-top";
 import { useViewer } from "@/hooks/use-viewer";
 import { api, errorMessage } from "@/lib/api-client";
 import type { Post, Profile } from "@/lib/types";
@@ -63,6 +69,7 @@ export default function Assbook() {
   const [confirmation, setConfirmation] = useState<EmailConfirmation | null>(
     null,
   );
+  const [followList, setFollowList] = useState<FollowListMode | "">("");
   const [replyPost, setReplyPost] = useState<Post | null>(null);
   const [reportPost, setReportPost] = useState<Post | null>(null);
   const [shareLink, setShareLink] = useState("");
@@ -87,6 +94,7 @@ export default function Assbook() {
     ready: viewer.ready,
   });
   const people = usePeople(viewerId, viewer.ready);
+  const topPosts = useTopPosts(viewerId, viewer.ready);
   const profileView = useProfile(profileTarget, viewerId, viewer.ready);
 
   // Stable handles, so the memoised post cards are not thrown away every time
@@ -101,7 +109,10 @@ export default function Assbook() {
   } = feed;
   const { patchFollowing: patchPersonFollowing, revalidate: revalidatePeople } =
     people;
-  const { patchFollowing: patchProfileFollowing } = profileView;
+  const {
+    patchFollowing: patchProfileFollowing,
+    bumpFollowingCount,
+  } = profileView;
 
   // The address bar is the external system here: ?profile= and ?post= deep
   // links on arrival, plus recovery and verification tokens in the fragment.
@@ -170,6 +181,7 @@ export default function Assbook() {
       setQuery("");
       setProfileHandle("");
       setPostId("");
+      setFollowList("");
       history.replaceState(null, "", "/");
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
@@ -184,6 +196,7 @@ export default function Assbook() {
     setPostId("");
     history.replaceState(null, "", "/?profile=" + encodeURIComponent(handle));
     window.scrollTo({ top: 0, behavior: "smooth" });
+    setFollowList("");
     setModal("");
   }, []);
 
@@ -193,6 +206,16 @@ export default function Assbook() {
     setProfileHandle("");
     setPostId("");
     history.replaceState(null, "", "/");
+  }, []);
+
+  const openPost = useCallback((id: string) => {
+    setView("everyone");
+    setSearch("");
+    setQuery("");
+    setProfileHandle("");
+    setPostId(id);
+    history.replaceState(null, "", "/?post=" + encodeURIComponent(id));
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   const exitSinglePost = useCallback(() => {
@@ -268,6 +291,7 @@ export default function Assbook() {
       const apply = (value: number) => {
         patchPersonFollowing(person.id, value);
         patchProfileFollowing(person.id, value);
+        bumpFollowingCount(viewerId, value ? 1 : -1);
       };
       apply(next);
       void run("follow:" + person.id, async () => {
@@ -288,12 +312,33 @@ export default function Assbook() {
       });
     },
     [
+      bumpFollowingCount,
       patchPersonFollowing,
       patchProfileFollowing,
       requireUser,
       revalidateFeed,
       run,
       view,
+      viewerId,
+    ],
+  );
+
+  // A follow made inside the followers or following dialog: the dialog already
+  // did the work, this only keeps the rest of the page in step.
+  const syncFollow = useCallback(
+    (person: Profile, following: number) => {
+      patchPersonFollowing(person.id, following);
+      patchProfileFollowing(person.id, following);
+      bumpFollowingCount(viewerId, following ? 1 : -1);
+      if (view === "following") revalidateFeed();
+    },
+    [
+      bumpFollowingCount,
+      patchPersonFollowing,
+      patchProfileFollowing,
+      revalidateFeed,
+      view,
+      viewerId,
     ],
   );
 
@@ -327,6 +372,25 @@ export default function Assbook() {
       });
     },
     [exitSinglePost, postId, removePost, revalidateFeed, run],
+  );
+
+  const togglePin = useCallback(
+    (post: Post) => {
+      void run("pin:" + post.id, async () => {
+        const result = await api<{ pinned: boolean }>(
+          "admin/pin/" + post.id,
+          { method: "POST" },
+        );
+        patchPost(post.id, { pinned: result.pinned ? 1 : 0 });
+        revalidateFeed();
+        toast.success(
+          result.pinned
+            ? "Pinned to the top of the feed."
+            : "Unpinned. Back in the pile.",
+        );
+      });
+    },
+    [patchPost, revalidateFeed, run],
   );
 
   const blockAuthor = useCallback(
@@ -413,21 +477,28 @@ export default function Assbook() {
         setAuthMode("signup");
         setModal("auth");
       }}
+      onSignIn={() => {
+        setAuthMode("login");
+        setModal("auth");
+      }}
       onOpenRules={() => setInfoModal("rules")}
       onOpenSource={() => setInfoModal("source")}
       onCompose={startPost}
       onFocusSearch={focusSearch}
       rail={
-        <PeopleRail
-          people={people.people}
-          loading={people.loading}
-          error={people.error}
-          onRetry={people.retry}
-          onVisit={visitProfile}
-          onFollow={follow}
-          pending={pending}
-          onOpenAll={() => setModal("people")}
-        />
+        <>
+          <TopPostsCard posts={topPosts} onOpenPost={openPost} />
+          <PeopleRail
+            people={people.people}
+            loading={people.loading}
+            error={people.error}
+            onRetry={people.retry}
+            onVisit={visitProfile}
+            onFollow={follow}
+            pending={pending}
+            onOpenAll={() => chooseView("people")}
+          />
+        </>
       }
     >
       <section className="intro">
@@ -466,6 +537,10 @@ export default function Assbook() {
           error={profileView.error}
           onRetry={profileView.retry}
           onEdit={() => setModal("edit")}
+          onOpenSecurity={() => setModal("security")}
+          onOpenFollowers={() => setFollowList("followers")}
+          onOpenFollowing={() => setFollowList("following")}
+          onChooseView={chooseView}
           onFollow={follow}
           followPending={pending.has(
             "follow:" + (profileView.profile?.id ?? ""),
@@ -487,35 +562,49 @@ export default function Assbook() {
           textareaRef={draftRef}
         />
       )}
-      <Feed
-        posts={feed.posts}
-        loading={feed.loading}
-        updating={feed.updating}
-        loadingMore={feed.loadingMore}
-        hasMore={feed.hasMore}
-        error={feed.error}
-        onRetry={retryFeed}
-        onLoadMore={loadMore}
-        view={view}
-        query={query}
-        viewer={user}
-        now={now}
-        pending={pending}
-        singlePostId={singlePostId}
-        otherHandle={otherHandle}
-        onExitSinglePost={exitSinglePost}
-        onChooseView={chooseView}
-        onCompose={startPost}
-        onFindPeople={() => setModal("people")}
-        onLike={like}
-        onSave={save}
-        onReplies={openReplies}
-        onShare={share}
-        onVisitProfile={visitProfile}
-        onDelete={deletePost}
-        onReport={openReport}
-        onBlock={blockAuthor}
-      />
+      {view === "people" ? (
+        <PeopleView
+          people={people.people}
+          loading={people.loading}
+          error={people.error}
+          onRetry={people.retry}
+          onVisit={visitProfile}
+          onFollow={follow}
+          pending={pending}
+        />
+      ) : (
+        <Feed
+          ownProfile={view === "profile" && (!profileHandle || profileHandle === user?.handle)}
+          posts={feed.posts}
+          loading={feed.loading}
+          updating={feed.updating}
+          loadingMore={feed.loadingMore}
+          hasMore={feed.hasMore}
+          error={feed.error}
+          onRetry={retryFeed}
+          onLoadMore={loadMore}
+          view={view}
+          query={query}
+          viewer={user}
+          now={now}
+          pending={pending}
+          singlePostId={singlePostId}
+          otherHandle={otherHandle}
+          onExitSinglePost={exitSinglePost}
+          onChooseView={chooseView}
+          onCompose={startPost}
+          onFindPeople={() => chooseView("people")}
+          onLike={like}
+          onSave={save}
+          onReplies={openReplies}
+          onShare={share}
+          onVisitProfile={visitProfile}
+          onDelete={deletePost}
+          onReport={openReport}
+          onBlock={blockAuthor}
+          onPin={togglePin}
+        />
+      )}
 
       {modal === "auth" && (
         <AuthDialog
@@ -627,16 +716,18 @@ export default function Assbook() {
       {modal === "report" && reportPost && (
         <ReportDialog post={reportPost} onClose={closeModal} />
       )}
-      {modal === "people" && (
-        <PeopleDialog
-          people={people.people}
-          loading={people.loading}
-          error={people.error}
-          onRetry={people.retry}
+      {followList && profileView.profile && (
+        <FollowListDialog
+          key={followList + ":" + profileView.profile.handle}
+          mode={followList}
+          handle={profileView.profile.handle}
+          name={profileView.profile.name}
+          isSelf={profileView.profile.id === viewerId}
+          viewerId={viewerId}
           onVisit={visitProfile}
-          onFollow={follow}
-          pending={pending}
-          onClose={closeModal}
+          onRequireUser={requireUser}
+          onFollowed={syncFollow}
+          onClose={() => setFollowList("")}
         />
       )}
       {modal === "blocked" && (
