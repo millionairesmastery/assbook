@@ -15,6 +15,13 @@
       "when": 1789582773812,
       "tag": "0001_solid_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789630340227,
+      "tag": "0002_warm_spitfire",
+      "breakpoints": true
     }
   ]
 }

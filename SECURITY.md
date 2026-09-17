@@ -10,7 +10,7 @@ derived key. This is one of [OWASP's recommended scrypt profiles](https://cheats
 The 16 MiB memory profile fits the Workers runtime. Legacy PBKDF2-SHA-256 hashes
 are accepted and upgraded after successful authentication.
 
-New passwords require 15–128 characters. Spaces are preserved; obvious repeated
+New passwords require 15 to 128 characters. Spaces are preserved; obvious repeated
 or predictable passwords are rejected. This is a small predictability check,
 not a comprehensive breached-password service.
 
@@ -26,20 +26,28 @@ Changing an email requires the current password; the previous recovery address
 remains active until confirmation. Existing accounts can add an address from
 Account security. Without a verified email, there is no email recovery path.
 
-Recovery requests return the same message for known and unknown email addresses.
-Requests are rate-limited by IP and normalized email; sign-in is also limited by
-handle. Delivery timing may still vary with the email provider. These controls
-do not replace edge bot protections or operational abuse monitoring.
+Recovery requests return the same message for known and unknown email addresses,
+and the email is sent after the response, so response time does not depend on
+whether the address exists. Requests are rate-limited by IP and normalized email.
+Sign-in is limited per handle by failed attempts only, and the counter resets on
+success. Signup never emails an address that is already verified on another
+account. These controls do not replace edge bot protections or operational
+abuse monitoring.
 
 Reset links expire after 20 minutes; verification links after 30 minutes. Their
 secret is placed in a URL fragment, removed from the address bar by the client,
-and submitted by a same-origin POST. Merely opening a link does not consume it.
-Production links use the configured HTTPS APP_ORIGIN.
+and submitted by a same-origin POST. A reset link only takes effect once a new
+password is entered. A verification link is submitted as soon as the page
+loads, so confirming an email is a single click; a scanner that merely fetches
+the URL never sees the fragment. Production links use the configured HTTPS
+APP_ORIGIN.
 
 Atomic conditional database updates enforce expiry, purpose, ownership, and
 single use. An account version invalidates old sessions and pending links after
-password changes, email verification, or session revocation. A password reset
-does not automatically sign in the browser.
+password changes, email verification, or session revocation; the sweep is
+scoped to the affected account. The browser that confirms an email keeps its
+own session if it was already signed in to that account. A password reset does
+not automatically sign in the browser.
 
 If verification email cannot be sent during signup, the account is created and
 the user is told to retry from Account security. Recovery delivery errors retain
@@ -50,12 +58,19 @@ the generic response. Logs include a failure event without recipient or token.
 - Configure and verify Cloudflare Email Sending and test real inbox delivery.
   Local bindings simulate email; their files and logs contain disposable links
   and must never be published.
-- Apply migration `0001_solid_blue_blade.sql` before deploying this authentication
-  code. Existing accounts are preserved and begin without a verified email.
-- Protect operator accounts and configure an owned ADMIN_HANDLE.
+- Apply migrations through `0002_warm_spitfire.sql` before deploying this code.
+  Existing accounts are preserved and begin without a verified email.
+- Protect operator accounts and configure an owned, lowercase ADMIN_HANDLE.
+  Moderator actions are logged with the moderator's account id and the post.
+- Photos are served with `private, no-cache` and an ETag: the browser keeps a
+  copy but asks the server before every use, so blocked and deleted photos
+  disappear immediately. Blocked users cannot fetch each other's photos.
+- Public reads are limited per IP (search more tightly). Route ids are
+  validated before any query.
 - MFA, passkeys, account deletion, and detailed session history are not implemented.
 - Photo ownership/clothing checks are uploader attestations plus manual reporting;
-  uploads are not automatically moderated or stripped of metadata.
+  uploads are not automatically moderated or stripped of metadata (EXIF,
+  including location, is served as uploaded).
 - No independent security audit or large-scale load test has been performed.
 
 The local authentication integration test covers session invalidation, concurrent

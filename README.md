@@ -12,9 +12,13 @@ photo is your own fully clothed behind. No face recognition. Just hindsight.
   signing out other sessions. Email addresses stay off public profiles.
 - Persistent profiles, bios, and photo uploads.
 - A chronological feed, following feed, search, and shareable post/profile links.
-- Posts, replies, likes, bookmarks, follows, blocks, and post reports.
-- An optional moderator queue for hiding reported posts.
-- Responsive desktop/mobile UI, accessible dialogs, keyboard navigation.
+- Posts, replies, likes, bookmarks, follows, blocks, and post reports. Replies
+  can be removed by their author, the post owner, or the moderator.
+- A moderator queue that groups reports by post, with hide and dismiss. One
+  report per person per post.
+- Responsive desktop/mobile UI, accessible dialogs, keyboard navigation, a
+  mobile compose button, and security headers on every page.
+- One-click email confirmation that keeps the confirming browser signed in.
 - Downloadable source, generated from the same checkout.
 - Local email simulation requires no service credentials. Live delivery uses
   Cloudflare Email Sending and requires sender-domain setup.
@@ -41,6 +45,7 @@ and the authentication integration test's disposable database fixtures.
 npm ci
 npm run db:local
 npm run db:seed     # optional fictional community examples
+cp .dev.vars.example .dev.vars   # optional local moderator handle for tests
 npm run dev
 ```
 
@@ -50,11 +55,15 @@ backside.” Local users, sessions, and photos stay in the ignored
 
 ```sh
 npm run typecheck
+npm run lint
 npm run build
 ASSBOOK_TEST_URL=http://localhost:5174 npm run test:smoke
 npm run source:zip
 ASSBOOK_TEST_URL=http://localhost:5174 npm run test:auth
 ```
+
+With `.dev.vars` in place, `ASSBOOK_ADMIN_HANDLE=test_mod_local npm run test:smoke`
+also exercises the moderator queue with a disposable local account.
 
 The smoke test accepts loopback URLs only, creates disposable accounts, checks
 the actual API and storage behavior, and cleans up its accounts. Use the port
@@ -83,8 +92,14 @@ concurrent replay, session revocation, and legacy password upgrades.
 7. Run `npm run source:zip`, then `npm run deploy`.
 8. Open your app, create an account, and test email verification and password
    recovery using a real mailbox you control.
-9. Set `ADMIN_HANDLE` in `wrangler.jsonc` to that existing account's handle,
-   then redeploy. The account menu will show the moderation queue.
+9. Set `ADMIN_HANDLE` in `wrangler.jsonc` to that existing account's handle
+   (lowercase), then redeploy. The account menu will show the moderation queue.
+   While it is empty, reports are stored but nobody can read them.
+
+There is no cron trigger. Expired sessions, limits, and links, and photos that
+never became an avatar or a live post, are cleaned up after sign-ins. Deleting
+a post or replacing an avatar removes the old photo from storage when nothing
+else uses it.
 
 Do not configure a moderator handle until you own that handle. Do not put
 passwords or API tokens in `wrangler.jsonc`. Cloudflare access is managed by
@@ -113,19 +128,23 @@ This is a working first version, not a claim of readiness for a mass launch.
   Accounts without one cannot use email recovery. MFA/passkeys and account
   deletion are not implemented yet.
 - Passwords use salted scrypt (N=16384, r=8, p=5). Legacy PBKDF2 passwords
-  upgrade after successful sign-in. New passwords require 15–128 characters.
+  upgrade after successful sign-in. New passwords require 15 to 128 characters.
   See [SECURITY.md](SECURITY.md) for the security model and remaining boundaries.
 - Apply all migrations before deploying: `0001_solid_blue_blade.sql` adds email,
-  account versions, and recovery-token storage without removing existing users.
+  account versions, and recovery-token storage; `0002_warm_spitfire.sql` adds
+  the indexes and the report constraint the code relies on. Neither removes
+  existing users.
 - Same-origin write checks, bounded uploads, file-signature checks, ownership
-  checks, hashed session tokens, and application rate limits are included.
-  Add an edge bot challenge and tune limits for your deployment.
+  checks, hashed session tokens, per-IP limits on public reads (tighter on
+  search), and per-account write limits are included. Sign-in throttling counts
+  failed attempts only. Add an edge bot challenge and tune limits for your
+  deployment.
 - Uploads are JPEG/PNG/WebP, at most 2 MB. Unattached uploads are visible only to
   their owner. The server does not strip EXIF metadata or scan image contents.
 - Posts are soft-deleted. A cleanup/retention policy for uploads, reports, and
   inactive accounts is an operator decision.
-- Feed pagination is a bounded offset implementation. Search is simple SQLite
-  text matching; adapt these when you have enough real traffic to measure.
+- Feed pagination is keyset-based. Search is simple SQLite text matching;
+  adapt it when you have enough real traffic to measure.
 - No private messaging, push notifications, or recommendation algorithm.
 
 ## Open source
@@ -141,8 +160,12 @@ or credentials. Set up your own database and bucket when self-hosting.
 
 ## Where things live
 
-- `app/assbook.tsx`: the interactive social app.
+- `app/assbook.tsx`: the app shell; `components/assbook/`: feed, composer,
+  profile, people, auth, moderation, and dialog components; `hooks/`: viewer,
+  feed, people, and profile state.
+- `lib/api-client.ts`: the one fetch wrapper with friendly errors.
 - `app/globals.css`: visual system and responsive styles.
+- `middleware.ts`: security headers for pages.
 - `app/api/[...path]/route.ts`: HTTP API and permission checks.
 - `lib/server.ts`: storage access, sessions, validation, rate limiting.
 - `lib/auth.ts`, `lib/password.ts`: recovery, email verification, password security.

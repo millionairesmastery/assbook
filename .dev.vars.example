@@ -1,0 +1,5 @@
+# Local-only Worker variables read by the dev server. Copy to .dev.vars.
+# A disposable moderator handle lets the smoke test cover the queue:
+#   ADMIN_HANDLE=test_mod_local
+#   ASSBOOK_ADMIN_HANDLE=test_mod_local npm run test:smoke
+ADMIN_HANDLE=test_mod_local

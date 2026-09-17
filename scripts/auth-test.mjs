@@ -29,8 +29,13 @@ function mails(forHandle = handle) {
   return [".wrangler/tmp/email", "dist/server/.wrangler/tmp/email"].map(p => resolve(p)).filter(existsSync).flatMap(emailFiles).map(path => ({text:readFileSync(path,"utf8"),time:statSync(path).mtimeMs}))
     .filter(m => m.text.includes("@" + forHandle)).sort((a,b) => b.time-a.time);
 }
-function token(purpose, forHandle = handle) {
-  const mail = mails(forHandle).find(m => m.text.includes("/#" + purpose + "="));
+async function token(purpose, forHandle = handle) {
+  // Recovery mail is sent after the response, so give the file a moment.
+  let mail;
+  for (let i = 0; i < 30 && !mail; i++) {
+    mail = mails(forHandle).find(m => m.text.includes("/#" + purpose + "="));
+    if (!mail) await new Promise(r => setTimeout(r, 100));
+  }
   assert.ok(mail, "Simulated email was written");
   const link = mail.text.match(/https?:\/\/[^\s]+/)[0];
   assert.equal(new URL(link).origin, base, "Local links point to this preview");
@@ -58,7 +63,7 @@ try {
   await request(anon,"signup",null,400);
   await request(anon,"signup",{handle,password,name:"Test",rules:true,email},403,{Origin:"https://foreign.example"});
   const joined = await request(a,"signup",{handle,password,name:"Auth test",rules:true,email});
-  assert.equal(joined.body.verificationSent,true);
+  assert.equal(joined.body.ok,true);
   assert.match(a.fullCookie,/HttpOnly/); assert.match(a.fullCookie,/SameSite=Lax/); assert.match(a.fullCookie,/Max-Age=604800/);
   const user = (await request(a,"me")).body.user;
   assert.equal(user.email,undefined);
@@ -74,20 +79,22 @@ try {
   const unverified = await request(anon,"auth/recover",{email});
   assert.deepEqual(unknown.body,unverified.body);
   assert.equal(mails().length,before);
-  const verification = token("verify");
+  const verification = await token("verify");
   assert.equal(sql("SELECT token FROM auth_tokens WHERE user_id=?",[user.id])[0].token,sha(verification));
   await request(anon,"auth/reset",{token:verification,password:nextPassword},400);
-  await request(anon,"auth/verify-email",{token:verification});
-  await request(anon,"auth/verify-email",{token:verification},400);
-  assert.equal((await request(a,"me")).body.user,null);
+  // The browser that opens the link keeps its session; every other one is signed out.
+  const confirmed = await request(a,"auth/verify-email",{token:verification});
+  assert.equal(confirmed.body.signedIn,true);
+  await request(a,"auth/verify-email",{token:verification},400);
+  assert.equal((await request(a,"me")).body.user.handle,handle);
   assert.equal((await request(b,"me")).body.user,null);
-  await login(a); await login(b);
+  await login(b);
   assert.equal((await request(a,"auth/security")).body.email,email);
   pass("Verification ownership, token hashing, single use, purpose checks, and unverified recovery rejection");
 
   const accepted = await request(anon,"auth/recover",{email});
   assert.deepEqual(accepted.body,unknown.body);
-  const recovery = token("reset");
+  const recovery = await token("reset");
   const outcomes = await Promise.all([{},{}].map(s => request(s,"auth/reset",{token:recovery,password:nextPassword},null)));
   assert.deepEqual(outcomes.map(r=>r.status).sort(),[200,400]);
   assert.equal((await request(a,"me")).body.user,null);
@@ -121,7 +128,7 @@ try {
   const newEmail = "new_"+email;
   await request(a,"auth/email",{currentPassword:password,email:newEmail});
   assert.equal((await request(a,"auth/security")).body.email,email);
-  await request(anon,"auth/verify-email",{token:token("verify")});
+  await request(anon,"auth/verify-email",{token:await token("verify")});
   await login(a);
   assert.equal((await request(a,"auth/security")).body.email,newEmail);
   pass("Changing recovery email retains old address until verification");

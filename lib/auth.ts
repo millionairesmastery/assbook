@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { body, cookie, db, hash, HttpError, json, newSession, rate, requireUser, sessionToken, str } from "./server";
+import { background, body, clientIp, cookie, db, hash, HttpError, json, newSession, rate, rateCount, rateReset, requireUser, sessionToken, str } from "./server";
 import { legacyHash, passwordHash, passwordInput, verifyPassword } from "./password";
 
 type Account = { id: string; handle: string; password: string; salt: string; email: string | null; auth_version: number };
@@ -13,8 +13,9 @@ function emailInput(value: unknown) {
   return email;
 }
 async function ipLimit(req: Request, category: string, max = 20) {
-  await rate(category + ":ip:" + await hash(req.headers.get("cf-connecting-ip") ?? "local"), max, 900000);
+  await rate(category + ":ip:" + await hash(clientIp(req)), max, 900000);
 }
+const handleWindow = 900000;
 async function account(id: string) {
   const user = await db().prepare("SELECT id,handle,password,salt,email,auth_version FROM users WHERE id=? AND demo=0").bind(id).first<Account>();
   if (!user) throw new HttpError(401, "Please sign in again.");
@@ -63,6 +64,16 @@ async function sendLink(req: Request, user: Account, email: string, purpose: "ve
     return false;
   }
 }
+// After an account version bump: drop the consumed link and every session or
+// pending link that belongs to the old version. Scoped to one user, so cost
+// does not grow with the size of the site.
+async function invalidate(userId: string, digest: string) {
+  await db().batch([
+    db().prepare("DELETE FROM auth_tokens WHERE token=?").bind(digest),
+    db().prepare("DELETE FROM auth_tokens WHERE user_id=? AND auth_version<(SELECT auth_version FROM users WHERE id=?)").bind(userId, userId),
+    db().prepare("DELETE FROM sessions WHERE user_id=? AND auth_version<(SELECT auth_version FROM users WHERE id=?)").bind(userId, userId),
+  ]);
+}
 async function tokenDigest(value: unknown) {
   if (typeof value !== "string" || !/^[a-f0-9-]{72}$/.test(value)) throw new HttpError(400, invalidLink);
   return hash(value);
@@ -73,8 +84,13 @@ export async function authRoute(req: Request, path: string): Promise<Response | 
   if ((path === "signup" || path === "login") && method === "POST") {
     await ipLimit(req, "auth");
     const data = await body(req), handle = str(data.handle, 24, 3).toLowerCase();
-    if (!/^[a-z0-9_]{3,24}$/.test(handle)) throw new HttpError(400, "Use 3–24 letters, numbers, or underscores.");
-    await rate("auth:handle:" + await hash(handle), 8, 900000);
+    if (!/^[a-z0-9_]{3,24}$/.test(handle)) throw new HttpError(400, "Use 3 to 24 letters, numbers, or underscores.");
+    const handleKey = "auth:handle:" + await hash(handle);
+    // Sign-in counts failures only, so a stranger cannot lock an account by
+    // guessing wrong on purpose while the real owner keeps signing in fine.
+    if (path === "signup") await rate(handleKey, 8, handleWindow);
+    else if (await rateCount(handleKey, handleWindow) >= 8)
+      throw new HttpError(429, "A little breather. Please try again shortly.");
     const password = passwordInput(data.password, path === "signup");
     if (path === "signup") {
       if (data.rules !== true) throw new HttpError(400, "Please agree to the community rules.");
@@ -88,12 +104,18 @@ export async function authRoute(req: Request, path: string): Promise<Response | 
         if (String(e).includes("UNIQUE")) throw new HttpError(409, "That handle is already taken.");
         throw e;
       }
-      const sent = await sendLink(req, { id, handle, password: stored, salt, email: null, auth_version: 0 }, email, "verify");
-      return json({ ok: true, verificationSent: sent }, 200, { "Set-Cookie": await newSession(req, id, 0) });
+      // An address already verified on another account is never mailed from
+      // signup, so nobody can use the sender domain to poke at strangers.
+      const claimed = await db().prepare("SELECT 1 FROM users WHERE email=?").bind(email).first();
+      if (!claimed) await sendLink(req, { id, handle, password: stored, salt, email: null, auth_version: 0 }, email, "verify");
+      return json({ ok: true }, 200, { "Set-Cookie": await newSession(req, id, 0) });
     }
     const user = await db().prepare("SELECT id,handle,password,salt,email,auth_version FROM users WHERE handle=? AND demo=0").bind(handle).first<Account>();
-    if (!await verifyPassword(password, user?.password ?? null, user?.salt ?? null) || !user)
+    if (!await verifyPassword(password, user?.password ?? null, user?.salt ?? null) || !user) {
+      await rate(handleKey, 8, handleWindow);
       throw new HttpError(401, "That handle and password do not match.");
+    }
+    await rateReset(handleKey, handleWindow);
     if (legacyHash(user.password)) {
       const salt = crypto.randomUUID();
       await db().prepare("UPDATE users SET password=?,salt=? WHERE id=? AND password=? AND auth_version=?")
@@ -107,7 +129,9 @@ export async function authRoute(req: Request, path: string): Promise<Response | 
     try { await rate("recover:email:" + await hash(email), 3, 3600000); }
     catch (e) { if (e instanceof HttpError && e.status === 429) return json({ message: genericRecovery }); throw e; }
     const user = await db().prepare("SELECT id,handle,password,salt,email,auth_version FROM users WHERE email=? AND demo=0").bind(email).first<Account>();
-    if (user) await sendLink(req, user, email, "reset");
+    // The send runs after the response so timing does not reveal which
+    // addresses have accounts.
+    if (user) background(sendLink(req, user, email, "reset"));
     return json({ message: genericRecovery });
   }
   if (path === "auth/reset" && method === "POST") {
@@ -116,32 +140,35 @@ export async function authRoute(req: Request, path: string): Promise<Response | 
     const salt = crypto.randomUUID(), stored = await passwordHash(password, salt);
     // Atomic conditional UPDATE: concurrent submissions can consume a link only once.
     // Versioned sessions/tokens also reject any sign-in racing this change.
-    const results = await db().batch([
-      db().prepare("UPDATE users SET password=?,salt=?,auth_version=auth_version+1 WHERE EXISTS(SELECT 1 FROM auth_tokens t WHERE t.token=? AND t.purpose='reset' AND t.expires>? AND t.user_id=users.id AND t.email=users.email AND t.auth_version=users.auth_version) RETURNING id")
-        .bind(stored, salt, digest, Date.now()),
-      db().prepare("DELETE FROM auth_tokens WHERE token=? AND purpose='reset' AND EXISTS(SELECT 1 FROM users u WHERE u.id=auth_tokens.user_id AND u.auth_version!=auth_tokens.auth_version)").bind(digest),
-      db().prepare("DELETE FROM sessions WHERE auth_version != (SELECT auth_version FROM users WHERE id=sessions.user_id)"),
-    ]);
-    if (!results[0].results.length) throw new HttpError(400, invalidLink);
+    const updated = await db().prepare("UPDATE users SET password=?,salt=?,auth_version=auth_version+1 WHERE EXISTS(SELECT 1 FROM auth_tokens t WHERE t.token=? AND t.purpose='reset' AND t.expires>? AND t.user_id=users.id AND t.email=users.email AND t.auth_version=users.auth_version) RETURNING id")
+      .bind(stored, salt, digest, Date.now()).first<{ id: string }>();
+    if (!updated) throw new HttpError(400, invalidLink);
+    await invalidate(updated.id, digest);
     return json({ ok: true }, 200, { "Set-Cookie": cookie(req, "") });
   }
   if (path === "auth/verify-email" && method === "POST") {
     await ipLimit(req, "verify", 10);
     const digest = await tokenDigest((await body(req)).token);
-    let results;
+    let updated: { id: string } | null;
     try {
-      results = await db().batch([
-        db().prepare("UPDATE users SET email=(SELECT email FROM auth_tokens WHERE token=?),auth_version=auth_version+1 WHERE EXISTS(SELECT 1 FROM auth_tokens t WHERE t.token=? AND t.purpose='verify' AND t.expires>? AND t.user_id=users.id AND t.auth_version=users.auth_version) RETURNING id")
-          .bind(digest, digest, Date.now()),
-        db().prepare("DELETE FROM auth_tokens WHERE token=? AND purpose='verify' AND EXISTS(SELECT 1 FROM users u WHERE u.id=auth_tokens.user_id AND u.auth_version!=auth_tokens.auth_version)").bind(digest),
-        db().prepare("DELETE FROM sessions WHERE auth_version != (SELECT auth_version FROM users WHERE id=sessions.user_id)"),
-      ]);
+      updated = await db().prepare("UPDATE users SET email=(SELECT email FROM auth_tokens WHERE token=?),auth_version=auth_version+1 WHERE EXISTS(SELECT 1 FROM auth_tokens t WHERE t.token=? AND t.purpose='verify' AND t.expires>? AND t.user_id=users.id AND t.auth_version=users.auth_version) RETURNING id")
+        .bind(digest, digest, Date.now()).first<{ id: string }>();
     } catch (e) {
       if (String(e).includes("UNIQUE")) throw new HttpError(400, "This email cannot be linked. Try account recovery or use another email.");
       throw e;
     }
-    if (!results[0].results.length) throw new HttpError(400, invalidLink);
-    return json({ ok: true }, 200, { "Set-Cookie": cookie(req, "") });
+    if (!updated) throw new HttpError(400, invalidLink);
+    // The browser that opened the link stays signed in if it already holds a
+    // session for this account. Every other session is signed out.
+    const current = sessionToken(req);
+    let signedIn = false;
+    if (/^[a-f0-9-]{72}$/.test(current)) {
+      const kept = await db().prepare("UPDATE sessions SET auth_version=(SELECT auth_version FROM users WHERE id=?) WHERE token=? AND user_id=? AND expires>?")
+        .bind(updated.id, await hash(current), updated.id, Date.now()).run();
+      signedIn = !!kept.meta.changes;
+    }
+    await invalidate(updated.id, digest);
+    return json({ ok: true, signedIn }, 200, signedIn ? {} : { "Set-Cookie": cookie(req, "") });
   }
   if (path === "auth/security" && method === "GET") {
     const me = await requireUser(req), user = await account(me.id);

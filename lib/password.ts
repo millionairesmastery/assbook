@@ -11,7 +11,7 @@ function derive(password: string, salt: string): Promise<Buffer> {
 }
 export function passwordInput(value: unknown, creating = false) {
   if (typeof value !== "string" || value.length > 128 || value.length < (creating ? 15 : 1))
-    throw new HttpError(400, creating ? "Use a password with 15–128 characters." : "Enter your password.");
+    throw new HttpError(400, creating ? "Use a password with 15 to 128 characters." : "Enter your password.");
   if (creating && (value.trim().length < 15 || /^(.)\1+$/.test(value) ||
     /^(password|123456789|qwerty|assbook)[\d\W_]*$/i.test(value)))
     throw new HttpError(400, "Choose a less predictable password. A few unrelated words work well.");

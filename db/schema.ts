@@ -4,6 +4,7 @@ import {
   integer,
   primaryKey,
   index,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 export const users = sqliteTable("users", {
   id: text().primaryKey(),
@@ -17,7 +18,7 @@ export const users = sqliteTable("users", {
   created: integer().notNull(),
   email: text().unique(),
   authVersion: integer("auth_version").notNull().default(0),
-});
+}, (t) => [index("users_avatar").on(t.avatar)]);
 export const sessions = sqliteTable(
   "sessions",
   {
@@ -28,7 +29,10 @@ export const sessions = sqliteTable(
     expires: integer().notNull(),
     authVersion: integer("auth_version").notNull().default(0),
   },
-  (t) => [index("sessions_expiry").on(t.expires)],
+  (t) => [
+    index("sessions_expiry").on(t.expires),
+    index("sessions_user").on(t.userId, t.authVersion),
+  ],
 );
 export const posts = sqliteTable(
   "posts",
@@ -45,6 +49,7 @@ export const posts = sqliteTable(
   (t) => [
     index("posts_created").on(t.created),
     index("posts_user").on(t.userId, t.created),
+    index("posts_image").on(t.image),
   ],
 );
 export const comments = sqliteTable(
@@ -114,7 +119,10 @@ export const blocks = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.targetId] })],
+  (t) => [
+    primaryKey({ columns: [t.userId, t.targetId] }),
+    index("blocks_target").on(t.targetId),
+  ],
 );
 export const uploads = sqliteTable("uploads", {
   id: text().primaryKey(),
@@ -123,17 +131,26 @@ export const uploads = sqliteTable("uploads", {
     .references(() => users.id, { onDelete: "cascade" }),
   created: integer().notNull(),
 });
-export const reports = sqliteTable("reports", {
-  id: text().primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  postId: text("post_id")
-    .notNull()
-    .references(() => posts.id, { onDelete: "cascade" }),
-  reason: text().notNull(),
-  created: integer().notNull(),
-});
+export const reports = sqliteTable(
+  "reports",
+  {
+    id: text().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    postId: text("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    reason: text().notNull(),
+    created: integer().notNull(),
+    resolved: integer().notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("reports_unique").on(t.userId, t.postId),
+    index("reports_post").on(t.postId),
+    index("reports_open").on(t.resolved, t.created),
+  ],
+);
 export const limits = sqliteTable(
   "limits",
   {

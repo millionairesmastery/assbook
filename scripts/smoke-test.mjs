@@ -134,10 +134,13 @@ try {
     201,
   );
   assert.equal((await req(anon, "feed?post=" + p.id)).posts[0].id, p.id);
-  await req(b, "posts/" + p.id, "DELETE");
+  await req(b, "posts/" + p.id, "DELETE", undefined, 404);
   assert.equal((await req(anon, "feed?post=" + p.id)).posts.length, 1);
+  await req(anon, "nonexistent", "GET", undefined, 404);
+  await req(a, "comments", "GET", undefined, 404);
+  await req(a, "like/not-a-uuid", "PUT", undefined, 404);
   pass(
-    "Posts survive reload, share links resolve, other users cannot delete them",
+    "Posts survive reload, share links resolve, other users cannot delete them, bad paths are 404s",
   );
   await req(b, "like/" + p.id, "PUT");
   await req(b, "like/" + p.id, "PUT");
@@ -149,7 +152,19 @@ try {
   assert.equal((await req(b, "feed?filter=following")).posts[0].id, p.id);
   pass("Idempotent likes, private bookmarks, and following feed");
   await req(b, "comments/" + p.id, "POST", { body: "A test reply" }, 201);
-  assert.equal((await req(a, "comments/" + p.id)).comments.length, 1);
+  const replies = (await req(a, "comments/" + p.id)).comments;
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0].user_id, bu.id);
+  await req(b, "comments/" + p.id, "POST", { body: "A second reply" }, 201);
+  const second = (await req(a, "comments/" + p.id)).comments[1];
+  await req(a, "comments/" + second.id, "DELETE");
+  await req(a, "comments/" + second.id, "DELETE", undefined, 404);
+  await req(b, "comments/" + replies[0].id, "DELETE");
+  assert.equal((await req(a, "comments/" + p.id)).comments.length, 0);
+  await req(b, "comments/" + p.id, "POST", { body: "A test reply" }, 201);
+  const own = (await req(a, "comments/" + p.id)).comments[0];
+  await req(anon, "comments/" + own.id, "DELETE", undefined, 401);
+  pass("Replies can be removed by their author or the post owner only");
   await req(
     b,
     "report/" + p.id,
@@ -157,13 +172,64 @@ try {
     { reason: "Disposable test report" },
     201,
   );
+  await req(
+    b,
+    "report/" + p.id,
+    "POST",
+    { reason: "Repeated test report" },
+    201,
+  );
   await req(b, "admin", "GET", undefined, 403);
+  await req(b, "admin/" + p.id + "/dismiss", "POST", {}, 403);
   await req(b, "block/" + au.id, "PUT");
   assert.equal((await req(b, "feed?post=" + p.id)).posts.length, 0);
+  assert.equal((await fetch(base + photo.url, { headers: { Cookie: b.cookie } })).status, 404);
   await req(b, "comments/" + p.id, "POST", { body: "Should fail" }, 404);
   await req(b, "block/" + au.id, "DELETE");
   assert.equal((await req(b, "feed?post=" + p.id)).posts.length, 1);
-  pass("Replies, reports, moderator authorization, blocking, and unblocking");
+  assert.equal((await fetch(base + photo.url, { headers: { Cookie: b.cookie } })).status, 200);
+  pass("Reports, moderator authorization, blocking hides posts and photos, and unblocking");
+  const page = await req(anon, "feed?q=" + encodeURIComponent("%"));
+  assert.equal(page.posts.length, 0, "LIKE wildcards are escaped");
+  const first = await req(anon, "feed");
+  assert.equal(typeof first.hasMore, "boolean");
+  assert.ok(first.next === null || typeof first.next.created === "number");
+  const cached = await fetch(base + photo.url, { headers: { Cookie: a.cookie } });
+  const etag = cached.headers.get("etag");
+  assert.ok(etag, "Photos carry an ETag");
+  const revalidated = await fetch(base + photo.url, { headers: { Cookie: a.cookie, "If-None-Match": etag } });
+  assert.equal(revalidated.status, 304);
+  pass("Search wildcards, keyset pagination fields, and photo revalidation");
+  // Moderation queue: only when the local server has ADMIN_HANDLE set to a
+  // disposable handle (see .dev.vars.example). Production must never use it.
+  const adminHandle = process.env.ASSBOOK_ADMIN_HANDLE;
+  if (adminHandle) {
+    const admin = { cookie: "" };
+    handles.push(adminHandle);
+    await req(admin, "signup", "POST", {
+      name: "Local moderator",
+      handle: adminHandle,
+      password,
+      email: adminHandle + "@example.com",
+      rules: true,
+    });
+    assert.equal((await req(admin, "me")).user.isAdmin, true);
+    const queue = (await req(admin, "admin")).reports;
+    const item = queue.find((r) => r.post_id === p.id);
+    assert.ok(item, "Reported post is in the queue");
+    assert.equal(item.count, 1, "Repeated reports by one person count once");
+    await req(admin, "admin/" + p.id + "/dismiss", "POST", {});
+    assert.ok(!(await req(admin, "admin")).reports.some((r) => r.post_id === p.id));
+    await req(b, "report/" + p.id, "POST", { reason: "Reported again" }, 201);
+    assert.ok(!(await req(admin, "admin")).reports.some((r) => r.post_id === p.id), "A resolved report stays resolved");
+    const p2 = await req(a, "posts", "POST", { body: "To be hidden " + suffix }, 201);
+    await req(b, "report/" + p2.id, "POST", { reason: "Hide this" }, 201);
+    await req(admin, "admin/" + p2.id, "DELETE");
+    await req(admin, "admin/" + p2.id, "DELETE", undefined, 404);
+    assert.equal((await req(anon, "feed?post=" + p2.id)).posts.length, 0);
+    await req(admin, "comments/" + own.id, "DELETE");
+    pass("Moderator queue groups reports, dismisses, hides posts, and removes replies");
+  } else console.log("SKIP moderator queue (set ASSBOOK_ADMIN_HANDLE and ADMIN_HANDLE in .dev.vars)");
   await req(a, "posts/" + p.id, "DELETE");
   assert.equal((await req(anon, "feed?post=" + p.id)).posts.length, 0);
   await req(a, "logout", "POST");

@@ -8,7 +8,6 @@ export type Profile = {
   created: number;
   following?: number;
   followers?: number;
-  blocked?: number;
   isAdmin?: boolean;
 };
 export type Post = {
@@ -26,11 +25,28 @@ export type Post = {
   liked: number;
   saved: number;
 };
+export type FeedCursor = { created: number; id: string };
+export type FeedResponse = {
+  posts: Post[];
+  hasMore: boolean;
+  next: FeedCursor | null;
+};
 export type Comment = {
   id: string;
+  post_id: string;
+  user_id: string;
   body: string;
   created: number;
   handle: string;
   name: string;
   avatar: string | null;
+};
+export type ReportGroup = {
+  post_id: string;
+  body: string;
+  image: string | null;
+  handle: string;
+  count: number;
+  latest: number;
+  reasons: string;
 };

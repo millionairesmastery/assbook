@@ -1,5 +1,4 @@
 import { authRoute } from "@/lib/auth";
-import { env } from "cloudflare:workers";
 import {
   db,
   bucket,
@@ -11,14 +10,39 @@ import {
   requireUser,
   sameOrigin,
   rate,
+  readLimit,
   cookie,
   sessionToken,
   ownImage,
   visiblePost,
   readBody,
+  uuid,
+  idPattern,
+  escapeLike,
+  photoId,
+  deleteUnusedUpload,
+  background,
   HttpError,
 } from "@/lib/server";
 export const dynamic = "force-dynamic";
+const blockClause =
+  "NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?))";
+const writePaths = [
+  "upload",
+  "profile",
+  "posts",
+  "like",
+  "save",
+  "follow",
+  "block",
+  "blocks",
+  "comments",
+  "report",
+  "admin",
+];
+function moderation(action: string, by: string, post: string) {
+  console.log(JSON.stringify({ event: "moderation", action, by, post }));
+}
 async function handle(req: Request) {
   try {
     const url = new URL(req.url),
@@ -38,18 +62,15 @@ async function handle(req: Request) {
       return json({ ok: true }, 200, { "Set-Cookie": cookie(req, "") });
     }
     if (path[0] === "feed" && method === "GET") {
+      await readLimit(req, "api", 120);
       const filter = url.searchParams.get("filter") ?? "everyone",
-        q = (url.searchParams.get("q") ?? "").slice(0, 100),
+        q = (url.searchParams.get("q") ?? "").trim().slice(0, 100),
         profile = url.searchParams.get("profile") ?? "",
-        offset = Math.max(
-          0,
-          Math.min(10000, Number(url.searchParams.get("offset")) || 0),
-        );
-      const clauses = [
-        "p.deleted=0",
-        "NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?))",
-      ];
-      const args: (string | number)[] = [uid, uid, uid, uid];
+        before = Number(url.searchParams.get("before")) || 0,
+        beforeId = url.searchParams.get("beforeId") ?? "";
+      const clauses = ["p.deleted=0", blockClause];
+      // Two for the reply count, one each for liked and saved, two for blocks.
+      const args: (string | number)[] = [uid, uid, uid, uid, uid, uid];
       if (filter === "following") {
         clauses.push(
           "EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id)",
@@ -72,26 +93,45 @@ async function handle(req: Request) {
         args.push(single);
       }
       if (q) {
-        clauses.push("(p.body LIKE ? OR u.name LIKE ? OR u.handle LIKE ?)");
-        args.push("%" + q + "%", "%" + q + "%", "%" + q + "%");
+        // Search cannot use an index, so it gets a tighter per-IP limit.
+        await readLimit(req, "search", 20);
+        clauses.push(
+          "(p.body LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR u.handle LIKE ? ESCAPE '\\')",
+        );
+        const like = "%" + escapeLike(q) + "%";
+        args.push(like, like, like);
       }
-      args.push(offset);
+      // Keyset pagination: stable under concurrent posting, no offset scan.
+      if (before && idPattern.test(beforeId)) {
+        clauses.push("(p.created<? OR (p.created=? AND p.id<?))");
+        args.push(before, before, beforeId);
+      }
       const rows = await db()
         .prepare(
-          "SELECT p.id,p.user_id,p.body,p.image,p.created,u.handle,u.name,u.avatar,u.demo,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE " +
+          "SELECT p.id,p.user_id,p.body,p.image,p.created,u.handle,u.name,u.avatar,u.demo,(SELECT count(*) FROM likes l WHERE l.post_id=p.id) likes,(SELECT count(*) FROM comments c WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=c.user_id) OR (b.user_id=c.user_id AND b.target_id=?))) comments,EXISTS(SELECT 1 FROM likes l WHERE l.post_id=p.id AND l.user_id=?) liked,EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id=p.id AND b.user_id=?) saved FROM posts p JOIN users u ON u.id=p.user_id WHERE " +
             clauses.join(" AND ") +
-            " ORDER BY p.created DESC,p.id DESC LIMIT 30 OFFSET ?",
+            " ORDER BY p.created DESC,p.id DESC LIMIT 31",
         )
-        .bind(uid, ...args)
-        .all();
-      return json({ posts: rows.results, hasMore: rows.results.length === 30 });
+        .bind(...args)
+        .all<{ id: string; created: number }>();
+      const hasMore = rows.results.length > 30;
+      const posts = rows.results.slice(0, 30);
+      const last = posts[posts.length - 1];
+      return json({
+        posts,
+        hasMore,
+        next: hasMore && last ? { created: last.created, id: last.id } : null,
+      });
     }
     if (path[0] === "people" && method === "GET") {
+      await readLimit(req, "api", 120);
       return json({
         people: (
           await db()
             .prepare(
-              "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u WHERE u.id!=? AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?)) ORDER BY u.demo ASC,u.created DESC LIMIT 20",
+              "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers FROM users u WHERE u.id!=? AND " +
+                blockClause +
+                " ORDER BY u.demo ASC,u.created DESC LIMIT 20",
             )
             .bind(uid, uid, uid, uid)
             .all()
@@ -99,9 +139,13 @@ async function handle(req: Request) {
       });
     }
     if (path[0] === "profile" && method === "GET") {
+      await readLimit(req, "api", 120);
+      if (!/^[a-z0-9_]{3,24}$/.test(path[1] ?? ""))
+        throw new HttpError(404, "This profile is unavailable.");
       const u = await db()
         .prepare(
-          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?))",
+          "SELECT u.id,u.handle,u.name,u.bio,u.avatar,u.demo,u.created,(SELECT count(*) FROM follows f WHERE f.target_id=u.id) followers,EXISTS(SELECT 1 FROM follows f WHERE f.user_id=? AND f.target_id=u.id) following FROM users u WHERE u.handle=? AND " +
+            blockClause,
         )
         .bind(uid, path[1], uid, uid)
         .first();
@@ -109,12 +153,15 @@ async function handle(req: Request) {
       return json({ profile: u });
     }
     if (path[0] === "comments" && method === "GET") {
-      await visiblePost(path[1], uid);
+      await readLimit(req, "api", 120);
+      await visiblePost(uuid(path[1]), uid);
       return json({
         comments: (
           await db()
             .prepare(
-              "SELECT c.id,c.body,c.created,u.handle,u.name,u.avatar FROM comments c JOIN users u ON u.id=c.user_id WHERE c.post_id=? AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.user_id=? AND b.target_id=u.id) OR (b.user_id=u.id AND b.target_id=?)) ORDER BY c.created ASC LIMIT 100",
+              "SELECT c.id,c.post_id,c.user_id,c.body,c.created,u.handle,u.name,u.avatar FROM comments c JOIN users u ON u.id=c.user_id WHERE c.post_id=? AND " +
+                blockClause +
+                " ORDER BY c.created ASC LIMIT 100",
             )
             .bind(path[1], uid, uid)
             .all()
@@ -122,34 +169,48 @@ async function handle(req: Request) {
       });
     }
     if (path[0] === "photo" && method === "GET") {
-      const id = path[1];
-      if (!id || !/^[a-f0-9-]{36}$/.test(id))
-        throw new HttpError(404, "Photo not found.");
-      const owner = await db()
-        .prepare("SELECT user_id FROM uploads WHERE id=?")
-        .bind(id)
-        .first<{ user_id: string }>();
-      if (!owner) throw new HttpError(404, "Photo not found.");
-      if (owner.user_id !== uid) {
-        const publicUse = await db()
-          .prepare(
-            "SELECT 1 FROM users WHERE avatar=? UNION ALL SELECT 1 FROM posts WHERE image=? AND deleted=0 LIMIT 1",
-          )
-          .bind("/api/photo/" + id, "/api/photo/" + id)
-          .first();
-        if (!publicUse) throw new HttpError(404, "Photo not found.");
+      const id = uuid(path[1]);
+      const link = "/api/photo/" + id;
+      // One indexed lookup: who owns it, and whether it is on a live post or
+      // an avatar (which is what makes it visible to other people).
+      const photo = await db()
+        .prepare(
+          "SELECT up.user_id,(EXISTS(SELECT 1 FROM users WHERE avatar=?) OR EXISTS(SELECT 1 FROM posts WHERE image=? AND deleted=0)) published FROM uploads up WHERE up.id=?",
+        )
+        .bind(link, link, id)
+        .first<{ user_id: string; published: number }>();
+      if (!photo) throw new HttpError(404, "Photo not found.");
+      if (photo.user_id !== uid) {
+        if (!photo.published) throw new HttpError(404, "Photo not found.");
+        // Blocking hides photos too, in both directions.
+        if (
+          uid &&
+          (await db()
+            .prepare(
+              "SELECT 1 FROM blocks WHERE (user_id=? AND target_id=?) OR (user_id=? AND target_id=?)",
+            )
+            .bind(uid, photo.user_id, photo.user_id, uid)
+            .first())
+        )
+          throw new HttpError(404, "Photo not found.");
       }
       const object = await bucket().get(id);
       if (!object) throw new HttpError(404, "Photo not found.");
-      return new Response(object.body, {
-        headers: {
-          "Content-Type": object.httpMetadata?.contentType ?? "image/jpeg",
-          "X-Content-Type-Options": "nosniff",
-          "Cache-Control": "private,no-store",
-          "Content-Security-Policy": "default-src 'none'; sandbox",
-        },
-      });
+      const headers: Record<string, string> = {
+        "Content-Type": object.httpMetadata?.contentType ?? "image/jpeg",
+        "X-Content-Type-Options": "nosniff",
+        // Stored by the browser but revalidated on every use, so access
+        // checks still run and blocked or deleted photos disappear promptly.
+        "Cache-Control": "private, no-cache",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
+        ETag: object.httpEtag,
+        "Content-Length": String(object.size),
+      };
+      if (req.headers.get("if-none-match") === object.httpEtag)
+        return new Response(null, { status: 304, headers });
+      return new Response(object.body, { headers });
     }
+    if (!writePaths.includes(path[0])) throw new HttpError(404, "Not found.");
     const user = await requireUser(req);
     await rate("write:" + user.id, 40);
     if (path[0] === "upload" && method === "POST") {
@@ -189,15 +250,20 @@ async function handle(req: Request) {
     }
     if (path[0] === "profile" && method === "PUT") {
       const d = await body(req);
+      // Partial updates: fields left out stay as they are.
+      const name = d.name === undefined ? null : str(d.name, 40, 1);
+      const bio = d.bio === undefined ? null : str(d.bio, 160);
+      const setAvatar = "avatar" in d;
+      const avatar = setAvatar ? await ownImage(d.avatar, user.id) : null;
       await db()
-        .prepare("UPDATE users SET name=?,bio=?,avatar=? WHERE id=?")
-        .bind(
-          str(d.name, 40, 1),
-          str(d.bio, 160),
-          await ownImage(d.avatar, user.id),
-          user.id,
+        .prepare(
+          "UPDATE users SET name=COALESCE(?,name),bio=COALESCE(?,bio),avatar=CASE WHEN ? THEN ? ELSE avatar END WHERE id=?",
         )
+        .bind(name, bio, setAvatar ? 1 : 0, avatar, user.id)
         .run();
+      const previous = photoId(user.avatar);
+      if (setAvatar && previous && user.avatar !== avatar)
+        background(deleteUnusedUpload(previous));
       return json({ ok: true });
     }
     if (path[0] === "posts" && method === "POST") {
@@ -217,17 +283,22 @@ async function handle(req: Request) {
       return json({ id }, 201);
     }
     if (path[0] === "posts" && method === "DELETE") {
-      await db()
-        .prepare("UPDATE posts SET deleted=1 WHERE id=? AND user_id=?")
-        .bind(path[1], user.id)
-        .run();
+      const removed = await db()
+        .prepare(
+          "UPDATE posts SET deleted=1 WHERE id=? AND user_id=? AND deleted=0 RETURNING image",
+        )
+        .bind(uuid(path[1]), user.id)
+        .first<{ image: string | null }>();
+      if (!removed) throw new HttpError(404, "This post is unavailable.");
+      const image = photoId(removed.image);
+      if (image) background(deleteUnusedUpload(image));
       return json({ ok: true });
     }
     if (
       ["like", "save"].includes(path[0]) &&
       ["PUT", "DELETE"].includes(method)
     ) {
-      await visiblePost(path[1], user.id);
+      await visiblePost(uuid(path[1]), user.id);
       const table = path[0] === "like" ? "likes" : "bookmarks";
       await db()
         .prepare(
@@ -243,7 +314,7 @@ async function handle(req: Request) {
       ["follow", "block"].includes(path[0]) &&
       ["PUT", "DELETE"].includes(method)
     ) {
-      const target = path[1];
+      const target = uuid(path[1]);
       if (
         target === user.id ||
         !(await db()
@@ -294,7 +365,7 @@ async function handle(req: Request) {
         ).results,
       });
     if (path[0] === "comments" && method === "POST") {
-      await visiblePost(path[1], user.id);
+      await visiblePost(uuid(path[1]), user.id);
       const d = await body(req);
       await db()
         .prepare(
@@ -310,12 +381,26 @@ async function handle(req: Request) {
         .run();
       return json({ ok: true }, 201);
     }
+    if (path[0] === "comments" && method === "DELETE") {
+      // The author, the owner of the post, or the moderator.
+      const result = await db()
+        .prepare(
+          "DELETE FROM comments WHERE id=? AND (user_id=? OR EXISTS(SELECT 1 FROM posts p WHERE p.id=comments.post_id AND p.user_id=?) OR ?=1)",
+        )
+        .bind(uuid(path[1]), user.id, user.id, user.isAdmin ? 1 : 0)
+        .run();
+      if (!result.meta.changes)
+        throw new HttpError(404, "This reply is unavailable.");
+      return json({ ok: true });
+    }
     if (path[0] === "report" && method === "POST") {
-      await visiblePost(path[1], user.id);
+      await rate("report:" + user.id, 10, 3600000);
+      await visiblePost(uuid(path[1]), user.id);
       const d = await body(req);
+      // One report per person per post. Repeats are accepted and ignored.
       await db()
         .prepare(
-          "INSERT INTO reports(id,user_id,post_id,reason,created) VALUES(?,?,?,?,?)",
+          "INSERT OR IGNORE INTO reports(id,user_id,post_id,reason,created) VALUES(?,?,?,?,?)",
         )
         .bind(
           crypto.randomUUID(),
@@ -328,23 +413,41 @@ async function handle(req: Request) {
       return json({ ok: true }, 201);
     }
     if (path[0] === "admin") {
-      if (!env.ADMIN_HANDLE || user.handle !== env.ADMIN_HANDLE)
-        throw new HttpError(403, "Moderator access required.");
+      if (!user.isAdmin) throw new HttpError(403, "Moderator access required.");
       if (method === "GET")
         return json({
           reports: (
             await db()
               .prepare(
-                "SELECT r.id,r.post_id,r.reason,r.created,p.body,u.handle FROM reports r JOIN posts p ON p.id=r.post_id JOIN users u ON u.id=p.user_id WHERE p.deleted=0 ORDER BY r.created DESC LIMIT 100",
+                "SELECT p.id post_id,p.body,p.image,u.handle,count(*) count,max(r.created) latest,group_concat(r.reason,char(10)) reasons FROM reports r JOIN posts p ON p.id=r.post_id JOIN users u ON u.id=p.user_id WHERE p.deleted=0 AND r.resolved=0 GROUP BY p.id ORDER BY latest DESC LIMIT 100",
               )
               .all()
           ).results,
         });
+      const post = uuid(path[1]);
       if (method === "DELETE") {
+        const removed = await db()
+          .prepare(
+            "UPDATE posts SET deleted=1 WHERE id=? AND deleted=0 RETURNING image",
+          )
+          .bind(post)
+          .first<{ image: string | null }>();
+        if (!removed) throw new HttpError(404, "This post is unavailable.");
         await db()
-          .prepare("UPDATE posts SET deleted=1 WHERE id=?")
-          .bind(path[1])
+          .prepare("UPDATE reports SET resolved=1 WHERE post_id=?")
+          .bind(post)
           .run();
+        moderation("hide", user.id, post);
+        const image = photoId(removed.image);
+        if (image) background(deleteUnusedUpload(image));
+        return json({ ok: true });
+      }
+      if (method === "POST" && path[2] === "dismiss") {
+        await db()
+          .prepare("UPDATE reports SET resolved=1 WHERE post_id=?")
+          .bind(post)
+          .run();
+        moderation("dismiss", user.id, post);
         return json({ ok: true });
       }
     }
@@ -359,7 +462,7 @@ async function handle(req: Request) {
       }),
     );
     return json(
-      { error: "Something went wrong. Your draft is safe—please try again." },
+      { error: "Something went wrong. Your draft is safe, please try again." },
       503,
     );
   }
