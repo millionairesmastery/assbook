@@ -145,7 +145,7 @@ export function FollowOnboardingDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="form-stack onboard-stack">
-          <label className="onboard-search">
+          <div className="onboard-search">
             <Search size={16} aria-hidden="true" />
             <input
               type="search"
@@ -156,7 +156,7 @@ export function FollowOnboardingDialog({
               autoComplete="off"
               maxLength={40}
             />
-          </label>
+          </div>
           {error ? (
             <div className="form-error" role="alert">
               <p>{error}</p>

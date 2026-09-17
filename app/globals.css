@@ -1622,24 +1622,32 @@ button.stat:hover {
 .onboard-stack {
   min-width: 0;
 }
+/* The icon sits inside the field on the left, on the same line as the text. */
 .onboard-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
+  position: relative;
+  color: #6b7681;
+}
+.onboard-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.assbook-dialog .form-stack .onboard-search input {
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid #e3e7ec;
   border-radius: 10px;
   background: #f7f8fa;
-  color: #6b7681;
-}
-.onboard-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  padding: 10px 0;
+  padding: 10px 12px 10px 38px;
   font-size: 14px;
-  outline: none;
+  color: #1c2328;
+}
+.assbook-dialog .form-stack .onboard-search input:focus {
+  outline: 2px solid #c94120;
+  outline-offset: 1px;
+  background: #fff;
 }
 .onboard-list {
   list-style: none;
